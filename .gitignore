@@ -1,0 +1,12 @@
+# Mac cache:
+.DS_Store
+
+# Eclipse IDE
+bin
+.externalToolBuilders
+.settings
+.classpath
+.project
+
+# Compiled
+*.class
