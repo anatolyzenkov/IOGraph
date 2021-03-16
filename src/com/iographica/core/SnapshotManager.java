@@ -26,6 +26,7 @@ public class SnapshotManager implements IEventHandler, IEventDispatcher {
 	private ArrayList<IEventHandler> _eventHandlers;
 	static public final Boolean PREVIEW = true;
 	static public final Boolean FULL_SIZE = false;
+	static private int _pixelScale = -1;
 
 	public SnapshotManager(JFrame mainWindow) {
 		_mainWindow = mainWindow;
@@ -99,6 +100,16 @@ public class SnapshotManager implements IEventHandler, IEventDispatcher {
 		
 		System.gc();
 		dispatchEvent(Data.BACKGROUND_IS_UP_TO_DATE);
+	}
+	
+	public static int getPixelScale() {
+		if (_pixelScale == -1) {
+			_pixelScale = 1;
+			if (!GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice().getDefaultConfiguration().getDefaultTransform().isIdentity()) {
+				_pixelScale = 2;
+			}
+		}
+		return _pixelScale;
 	}
 
 	public static Rectangle getScreenBounds(Boolean preview) {

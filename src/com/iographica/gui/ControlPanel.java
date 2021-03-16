@@ -27,6 +27,7 @@ public class ControlPanel extends JPanel implements IEventDispatcher, IEventHand
 	private JPanel _screenshotPanel;
 	private ArrayList<IEventHandler> _eventHandlers;
 	private JCheckBox _colorSceme;
+	private Font _font;
 
 	public ControlPanel() {
 		super();
@@ -45,17 +46,18 @@ public class ControlPanel extends JPanel implements IEventDispatcher, IEventHand
 		this.add(get_colorScheme(), null);
 		this.setSize(Data.MAIN_FRAME_WIDTH - 20, Data.PANEL_HEIGHT);
 		this.setPreferredSize(new Dimension(Data.MAIN_FRAME_WIDTH - 20, Data.PANEL_HEIGHT));
+		_font = new Font(Data.getFont(), Font.PLAIN, 12);
 	}
 
 	private JCheckBox get_recordMouseStops() {
 		if (_ignoreMousePauses == null) {
 			_ignoreMousePauses = new JCheckBox();
+			_ignoreMousePauses.setFont(_font);
 			_ignoreMousePauses.setText("Ignore Mouse Stops");
 			_ignoreMousePauses.setToolTipText("Do not draw circles");
 			_ignoreMousePauses.setHorizontalAlignment(SwingConstants.LEFT);
 			setLook(_ignoreMousePauses, false);
 			_ignoreMousePauses.setSelected(Data.prefs.getBoolean(Data.IGNORE_MOUSE_STOPS, false));
-			_ignoreMousePauses.setFont(new Font(_ignoreMousePauses.getFont().getFontName(), Font.PLAIN, 13));
 			_ignoreMousePauses.setForeground(Data.TEXT_COLOR);
 			_ignoreMousePauses.addItemListener(new java.awt.event.ItemListener() {
 				public void itemStateChanged(java.awt.event.ItemEvent e) {
@@ -71,7 +73,7 @@ public class ControlPanel extends JPanel implements IEventDispatcher, IEventHand
 			_multipleMonitors = new JCheckBox();
 			_multipleMonitors.setEnabled(Data.moreThanOneMonitor);
 			setLook(_multipleMonitors, false);
-			_multipleMonitors.setFont(new Font(_multipleMonitors.getFont().getFontName(), Font.PLAIN, 13));
+			_multipleMonitors.setFont(_font);
 			_multipleMonitors.setForeground(Data.TEXT_COLOR);
 			_multipleMonitors.setSelected(Data.prefs.getBoolean(Data.USE_MULTIPLE_MONITORS, true));
 			_multipleMonitors.setText("Use Multiple Monitors");
@@ -109,7 +111,7 @@ public class ControlPanel extends JPanel implements IEventDispatcher, IEventHand
 			_useBackground.setText("Use Desktop");
 			_useBackground.setToolTipText("Use desktop as background");
 			setLook(_useBackground, false);
-			_useBackground.setFont(new Font(_useBackground.getFont().getFontName(), Font.PLAIN, 13));
+			_useBackground.setFont(_font);
 			_useBackground.setForeground(Data.TEXT_COLOR);
 			_useBackground.addItemListener(new java.awt.event.ItemListener() {
 				public void itemStateChanged(java.awt.event.ItemEvent e) {
@@ -123,7 +125,7 @@ public class ControlPanel extends JPanel implements IEventDispatcher, IEventHand
 	private JCheckBox get_colorScheme() {
 		if (_colorSceme == null) {
 			_colorSceme = new JCheckBox();
-			_colorSceme.setFont(new Font(_multipleMonitors.getFont().getFontName(), Font.PLAIN, 13));
+			_colorSceme.setFont(_font);
 			_colorSceme.setForeground(Data.TEXT_COLOR);
 			_colorSceme.setSelected(Data.prefs.getBoolean(Data.USE_COLOR_SCHEME, false));
 			_colorSceme.setText("Use Colourful Scheme");

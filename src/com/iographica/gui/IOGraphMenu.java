@@ -10,8 +10,6 @@ import java.awt.event.ActionListener;
 import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
 import java.awt.event.KeyEvent;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 
 import com.iographica.core.Data;
@@ -20,7 +18,6 @@ import com.iographica.core.WebSurfer;
 import com.iographica.events.IEventDispatcher;
 import com.iographica.events.IEventHandler;
 import com.iographica.events.IOEvent;
-import com.iographica.osx.OSXExtensions;
 
 public class IOGraphMenu extends MenuBar implements IEventDispatcher, IEventHandler {
 
@@ -152,10 +149,10 @@ public class IOGraphMenu extends MenuBar implements IEventDispatcher, IEventHand
 		});
 
 		m = this.add(new Menu("Help"));
-		mi = m.add(new MenuItem("Online F.A.Q..."));
+		mi = m.add(new MenuItem("Get Source Code from GitHub…"));
 		mi.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				WebSurfer.get(Data.FAQ_URL);
+				WebSurfer.get(Data.GIT_REPO_URL);
 			}
 		});
 		if (!Data.isOSX) {
@@ -185,78 +182,18 @@ public class IOGraphMenu extends MenuBar implements IEventDispatcher, IEventHand
 		});
 		m.add(_checkForUpdateAutomaticalyMenuItem);
 		m.addSeparator();
-		mi = m.add(new MenuItem("Support IOGraphica..."));
-		mi.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				dispatchEvent(Data.CLOSE_NOTIFICATION_BAR);
-				WebSurfer.get(Data.DONATE_URL);
-			}
-		});
-		mi = m.add(new MenuItem("Join Our Facebook Community..."));
+		mi = m.add(new MenuItem("Join Our Facebook Community…"));
 		mi.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				WebSurfer.get(Data.FACEBOOK_PAGE_URL);
 			}
 		});
-		mi = m.add(new MenuItem("Visit IOGraphica's Website..."));
+		mi = m.add(new MenuItem("Visit IOGraphica's Website…"));
 		mi.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				WebSurfer.get(Data.WEBSITE_URL);
 			}
 		});
-		if (Data.isOSX) {
-			com.apple.eawt.Application app = (com.apple.eawt.Application) getApplication();
-			Object aboutHandler = getOSXExtension(OSXExtensions.osxAboutHandler);
-			((IEventDispatcher) aboutHandler).addEventHandler(this);
-			app.setAboutHandler((com.apple.eawt.AboutHandler) aboutHandler);
-
-			Object quitHandler = getOSXExtension(OSXExtensions.osxQuitHandler);
-			((IEventDispatcher) quitHandler).addEventHandler(this);
-			app.setQuitHandler((com.apple.eawt.QuitHandler) quitHandler);
-		}
-	}
-
-	private Object getOSXExtension(String extensionPath) {
-		try {
-			Class<?> cls = Class.forName(extensionPath);
-			try {
-				return cls.newInstance();
-			} catch (InstantiationException e) {
-				e.printStackTrace();
-			} catch (IllegalAccessException e) {
-				e.printStackTrace();
-			}
-		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
-		}
-		return null;
-	}
-
-	private Object getApplication() {
-		Class<?> cls = null;
-		try {
-			cls = Class.forName(OSXExtensions.application);
-		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
-		}
-		Method mtd = null;
-		try {
-			mtd = cls.getDeclaredMethod("getApplication");
-		} catch (SecurityException e1) {
-			e1.printStackTrace();
-		} catch (NoSuchMethodException e1) {
-			e1.printStackTrace();
-		}
-		try {
-			return mtd.invoke(null);
-		} catch (IllegalArgumentException e1) {
-			e1.printStackTrace();
-		} catch (IllegalAccessException e1) {
-			e1.printStackTrace();
-		} catch (InvocationTargetException e1) {
-			e1.printStackTrace();
-		}
-		return null;
 	}
 
 	public void showAboutDialog() {

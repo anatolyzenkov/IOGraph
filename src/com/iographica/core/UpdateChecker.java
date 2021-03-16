@@ -34,7 +34,6 @@ public class UpdateChecker extends Object implements IEventDispatcher, IEventHan
 				}
 				
 				if (Data.isCheckingForUpdates) _updateConsoleFrame.setVisible(true);
-				
 				try {
 					URL iographica = new URL(Data.UPDATE_URL);
 					URLConnection connection = iographica.openConnection();

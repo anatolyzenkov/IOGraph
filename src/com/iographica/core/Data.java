@@ -13,23 +13,23 @@ import java.util.jar.JarFile;
 import java.util.jar.JarInputStream;
 import java.util.jar.Manifest;
 import java.util.prefs.Preferences;
-
 import javax.swing.JFrame;
-
-import com.iographica.utils.debug.gui.DebugConsole;
+//import com.iographica.utils.debug.gui.DebugConsole;
 
 public class Data {
-	public static final String APPLICATION_NAME = "IOGraph";
-	public static final String APPLICATION_VERSION = "1.0.1";
-	public static final String WEBSITE_URL = "http://iographica.com/";
-	public static final String UPDATE_URL = "http://iographica.com/update/";
-	public static final String FACEBOOK_PAGE_URL = "http://www.facebook.com/pages/IOGraphica/317794951637";
-	public static final String FAQ_URL = "http://iographica.com/faq/";
+	public static final String APPLICATION_NAME = "IOGraph"; 
+	public static final String WEBSITE_URL = "https://iographica.com/";
+//	public static final String WEBSITE_URL = "http://localhost:8888/";
+	public static final String UPDATE_URL = WEBSITE_URL + "update/";
+	public static final String FAQ_URL = WEBSITE_URL + "faq/";
+	public static final String DONATE_URL = WEBSITE_URL + "donate/";
+	public static final String FACEBOOK_PAGE_URL = "https://www.facebook.com/pages/IOGraphica/317794951637";
+	public static final String GIT_REPO_URL = "https://github.com/anatolyzenkov/iograph";
 	public static final String RESOURCE_DIRECTORY = "/recources/";
 	public static final String IOGRAPH_NODE_NAME = "/com/iographica/iograph";
-	public static final String ZENKOV_WEBSITE_URL = "http://anatolyzenkov.com/";
-	public static final String SHIPILOV_WEBSITE_URL = "http://andreyshipilov.com/";
-	public static final String DONATE_URL = "http://iographica.com/donate/";
+	public static final String ZENKOV_WEBSITE_URL = "https://anatolyzenkov.com/";
+	public static final String SHIPILOV_WEBSITE_URL = "https://andreyshipilov.com/";
+	public static String _font = "none";
 	public static final int MAIN_FRAME_WIDTH = 465;
 	public static final int PANEL_HEIGHT = 66;
 	public static final Color TEXT_COLOR = new Color(0x313131);
@@ -93,13 +93,12 @@ public class Data {
 	public static Boolean isCheckingForUpdates = false;
 	// private static String _version = "Not acquired from MANIFEST.MF.";
 	private static String _version = "0.0.0";
-	private static DebugConsole _console;
 
 	public static void getPrefs() {
-		_console = new DebugConsole();
-		_console.setVisible(true);
+//		_console = new DebugConsole();
+//		_console.setVisible(true);
 		System.getProperties().list(System.out);
-		//readManifest();
+		readManifest();
 		GraphicsEnvironment e = GraphicsEnvironment.getLocalGraphicsEnvironment();
 		GraphicsDevice[] a = e.getScreenDevices();
 		moreThanOneMonitor = a.length > 1;
@@ -146,6 +145,7 @@ public class Data {
 			try {
 				JarFile jar = new JarFile(pathtojar);
 				manifest = jar.getManifest();
+				jar.close();
 			} catch (IOException e) {
 				e.printStackTrace();
 				s = "E5 " + classpath + " " + userdir + " " + pathtojar;
@@ -159,6 +159,32 @@ public class Data {
 		Attributes attr = manifest.getMainAttributes();
 		_version = attr.getValue("Specification-Version");
 		System.out.println("Specification Version: " + _version);
+	}
+	
+	public static String getFont() {
+		if (_font == "none") {
+			_font = "";
+			GraphicsEnvironment e = GraphicsEnvironment.getLocalGraphicsEnvironment();
+			for (String fName : e.getAvailableFontFamilyNames()) {
+				if (fName.equals("Helvetica Neue")) {
+					_font = fName;
+					break;
+				}
+				if (fName.equals("Helvetica")) {
+					_font = fName;
+					break;
+				}
+				if (fName.equals("Arial")) {
+					_font = fName;
+					break;
+				}
+				if (fName.equals("Verdana")) {
+					_font = fName;
+					break;
+				}
+			}
+		}
+		return _font;
 	}
 
 	public static String getApplicationVersion() {

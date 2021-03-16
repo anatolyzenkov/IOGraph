@@ -36,7 +36,7 @@ public class WelcomePanel extends JPanel implements IEventHandler {
 	 */
 	private void initialize() {
 		_preiod = new JLabel();
-		_preiod.setFont(new Font(_preiod.getFont().getFontName(), Font.PLAIN, 12));
+		_preiod.setFont(new Font(Data.getFont(), Font.PLAIN, 12));
 		_preiod.setText("Press button above to start mouse tracking.");
 		_preiod.setOpaque(false);
 		_preiod.setHorizontalAlignment(SwingConstants.CENTER);

@@ -12,12 +12,14 @@ import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 
 import com.iographica.core.Data;
+import com.iographica.core.SnapshotManager;
 
 class Drawer {
 	private static final float RADIUS_TRESHOLD = 20;
 	private static final int DELAY_DISTANCE_QUAD = 400;
 	private float _scale;
 	private Rectangle _rect;
+	private Rectangle _updateRect;
 	private float _radius;
 	private FPoint _prevP;
 	private FPoint _newP;
@@ -26,11 +28,18 @@ class Drawer {
 	private Graphics2D _graphics2D;
 	private BufferedImage _imagePreview;
 	private Graphics2D _previewGraphics2D;
+	private int _pixelScale;
 
 	public Drawer() {
+		_updateRect = new Rectangle(0, 0, 2, 2);
 	}
 	
+	public Rectangle getUpdateRect() {
+		return _updateRect;
+	}
+
 	public void setupImages(Rectangle r, float s) {
+		_pixelScale = SnapshotManager.getPixelScale();
 		RenderingHints renderHints = new RenderingHints(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 		renderHints.put(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
 		_rect = r;
@@ -40,29 +49,29 @@ class Drawer {
 				_image.flush();
 				_image = null;
 				System.gc();
-				_image = new BufferedImage(r.width, r.height, BufferedImage.TYPE_INT_ARGB);
+				_image = new BufferedImage(r.width * _pixelScale, r.height * _pixelScale, BufferedImage.TYPE_INT_ARGB);
 			}
 		} else {
-			_image = new BufferedImage(r.width, r.height, BufferedImage.TYPE_INT_ARGB);
+			_image = new BufferedImage(r.width * _pixelScale, r.height * _pixelScale, BufferedImage.TYPE_INT_ARGB);
 		}
 		_graphics2D = (Graphics2D) _image.getGraphics();
 		_graphics2D.setRenderingHints(renderHints);
 		_graphics2D.setColor(new Color(0x000000));
-		_graphics2D.setStroke(new BasicStroke(Data.STROKE_WEIGHT, BasicStroke.CAP_BUTT, BasicStroke.CAP_BUTT, 10));
+		_graphics2D.setStroke(new BasicStroke(Data.STROKE_WEIGHT * _pixelScale, BasicStroke.CAP_BUTT, BasicStroke.CAP_BUTT, 10));
 		if (_imagePreview != null) {
 			if (_imagePreview.getWidth() != r.width || _imagePreview.getHeight() != r.height) {
 				_imagePreview.flush();
 				_imagePreview = null;
 				System.gc();
-				_imagePreview = new BufferedImage(r.width, r.height, BufferedImage.TYPE_INT_ARGB);
+				_imagePreview = new BufferedImage(r.width * _pixelScale, r.height * _pixelScale, BufferedImage.TYPE_INT_ARGB);
 			}
 		} else {
-			_imagePreview = new BufferedImage(r.width, r.height, BufferedImage.TYPE_INT_ARGB);
+			_imagePreview = new BufferedImage(r.width * _pixelScale, r.height * _pixelScale, BufferedImage.TYPE_INT_ARGB);
 		}
 		_previewGraphics2D = (Graphics2D) _imagePreview.getGraphics();
 		_previewGraphics2D.setRenderingHints(renderHints);
 		_previewGraphics2D.setColor(new Color(0x000000));
-		_previewGraphics2D.setStroke(new BasicStroke(Data.STROKE_WEIGHT*s, BasicStroke.CAP_BUTT, BasicStroke.CAP_BUTT, 10));
+		_previewGraphics2D.setStroke(new BasicStroke(Data.STROKE_WEIGHT * s * _pixelScale, BasicStroke.CAP_BUTT, BasicStroke.CAP_BUTT, 10));
 		resetImages();
 	}
 	
@@ -87,7 +96,10 @@ class Drawer {
 		_radius = 0;
 	}
 	
-	public void update() {
+	public Rectangle update() {
+//		_previewGraphics2D.setColor(new Color((float)Math.random(),(float)Math.random(),(float)Math.random()));
+//		_previewGraphics2D.fillRect(0, 0, _imagePreview.getWidth(), _imagePreview.getHeight());
+		
 		Point p = MouseInfo.getPointerInfo().getLocation();
 		_newP.x = p.x;
 		_newP.y = p.y;
@@ -95,12 +107,21 @@ class Drawer {
 		_newP.y -= _rect.y;
 		boolean noMovement = _prevP.x == _newP.x && _prevP.y == _newP.y;
 		if (!noMovement) {
-			drawLine(_previewGraphics2D, _scale);
-			drawLine(_graphics2D, 1.f);
+			float s = _scale;
+			int x1 = (int)(_newP.x * s);
+			int y1 = (int)(_newP.y * s);
+			int x2 = (int)(_prevP.x * s);
+			int y2 = (int)(_prevP.y * s);
+			_updateRect.x = Math.min(x1, x2) - 1;
+			_updateRect.y = Math.min(y1, y2) - 1;
+			_updateRect.width = 2 + Math.abs(x1 - x2);
+			_updateRect.height = 2 + Math.abs(y1 - y2);
+			drawLine(_previewGraphics2D, _scale * _pixelScale);
+			drawLine(_graphics2D, 1.f * _pixelScale);
 		}
 		if (Data.prefs.getBoolean(Data.IGNORE_MOUSE_STOPS, false)) {
 			_prevP.be(_newP);
-			return;
+			return _updateRect;
 		}
 		float dx = _newP.x - _stopP.x;
 		float dy = _newP.y - _stopP.y;
@@ -108,16 +129,21 @@ class Drawer {
 		if (d < DELAY_DISTANCE_QUAD) {
 			_radius += .3;
 			_prevP.be(_newP);
-			return;
+			return _updateRect;
 		}
 		if (_radius > RADIUS_TRESHOLD) {
 			_radius = Math.min(_radius, (float) Math.pow(_image.getHeight() * .25, 2));
-			drawEllipse(_previewGraphics2D, _scale);
-			drawEllipse(_graphics2D, 1.f);
+			Rectangle rect = drawEllipse(_previewGraphics2D, _scale * _pixelScale);
+			drawEllipse(_graphics2D, 1.f * _pixelScale);
+			_updateRect.x = (int)(rect.x / _pixelScale);
+			_updateRect.y = (int)(rect.y / _pixelScale);
+			_updateRect.width = (int)(rect.width / _pixelScale);
+			_updateRect.height = (int)(rect.height / _pixelScale);
 		}
 		_prevP.be(_newP);
 		_stopP.be(_newP);
 		_radius = 0;
+		return _updateRect;
 	}
 	
 	void drawLine(Graphics2D g, float s) {
@@ -125,17 +151,25 @@ class Drawer {
 		g.drawLine((int)(_newP.x * s), (int)(_newP.y * s), (int)(_prevP.x * s), (int)(_prevP.y * s));
 	}
 
-	void drawEllipse(Graphics g, float s) {
-		float haloDiameter = 2 * _radius * s;
-		float dotDiameter = 2 * ((float) Math.sqrt(_radius)) * s;
+	Rectangle drawEllipse(Graphics g, float s) {
+		int haloDiameter = (int)(2 * _radius * s);
+		int dotDiameter = (int)(2 * ((float) Math.sqrt(_radius)) * s);
 		float n = 200f * Math.max(0f, 1f - 2f*(float) Math.sqrt(_radius)/RADIUS_TRESHOLD);
 		int chanelColor = Data.prefs.getBoolean(Data.USE_COLOR_SCHEME, false) ? 0 : 255;
 		Color c = new Color(chanelColor, chanelColor, chanelColor, (int)n);
+		int hx = (int)(_prevP.x * s - haloDiameter * .5f);
+		int hy = (int)(_prevP.y * s - haloDiameter * .5f);
+		int dx = (int)(_prevP.x * s - dotDiameter * .5f);
+		int dy = (int)(_prevP.y * s - dotDiameter * .5f);
 		g.setColor(c);
-		g.fillOval((int) (_prevP.x * s - haloDiameter * .5f), (int) (_prevP.y * s - haloDiameter * .5f), (int) haloDiameter, (int) haloDiameter);
+		g.fillOval(hx, hy, haloDiameter, haloDiameter);
 		g.setColor(getColor());
-		g.drawOval((int) (_prevP.x * s - haloDiameter * .5f), (int) (_prevP.y * s - haloDiameter * .5f), (int) haloDiameter, (int) haloDiameter);
-		g.fillOval((int) (_prevP.x * s - dotDiameter * .5f), (int) (_prevP.y * s - dotDiameter * .5f), (int) dotDiameter, (int) dotDiameter);
+		g.drawOval(hx, hy, haloDiameter, haloDiameter);
+		g.fillOval(dx, dy, dotDiameter, dotDiameter);
+		return new Rectangle(	hx - 2,
+								hy - 2,
+								haloDiameter + 4,
+								haloDiameter + 4);
 	}
 	
 	private Color getColor() {
@@ -173,6 +207,7 @@ class Drawer {
 		setDarkness(_previewGraphics2D);
 		_graphics2D.clearRect(0, 0, _image.getWidth(), _image.getHeight());
 		_previewGraphics2D.clearRect(0, 0, _imagePreview.getWidth(), _imagePreview.getHeight());
+		
 	}
 }
 

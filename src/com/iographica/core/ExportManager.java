@@ -21,12 +21,7 @@ public class ExportManager implements IEventDispatcher {
 
 	public void export(BufferedImage img) {
 		BufferedImage canvas = null;
-		if (Data.useScreenshot) {
-			try {
-				canvas = ImageIO.read(new File(Data.BACKGROUND_FILE_NAME));
-			} catch (IOException e) {
-			}
-		}
+		BufferedImage bckgrnd = null;
 		if (canvas == null) {
 			canvas = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_INT_RGB);
 			Graphics2D g = canvas.createGraphics();
@@ -36,6 +31,17 @@ public class ExportManager implements IEventDispatcher {
 				g.setColor(Color.WHITE);
 			}
 			g.fillRect(0, 0, img.getWidth(), img.getHeight());
+		}
+		if (Data.useScreenshot) {
+			try {
+				bckgrnd= ImageIO.read(new File(Data.BACKGROUND_FILE_NAME));
+				canvas.createGraphics().drawImage(bckgrnd,
+						0, 0, canvas.getWidth(), canvas.getHeight(),
+						null);
+				bckgrnd.flush();
+				bckgrnd = null;
+			} catch (IOException e) {
+			}
 		}
 		canvas.createGraphics().drawImage(img, 0, 0, null);
 

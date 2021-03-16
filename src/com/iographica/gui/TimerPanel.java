@@ -45,7 +45,7 @@ public class TimerPanel extends JPanel implements IEventHandler, IEventDispatche
 	 */
 	private void initialize() {
 		_preiod = new JLabel();
-		_preiod.setFont(new Font(_preiod.getFont().getFontName(), Font.PLAIN, 12));
+		_preiod.setFont(new Font(Data.getFont(), Font.PLAIN, 12));
 		_preiod.setText("Time Period");
 		_preiod.setOpaque(false);
 		_preiod.setPreferredSize(new Dimension(Data.MAIN_FRAME_WIDTH, 20));
@@ -53,7 +53,7 @@ public class TimerPanel extends JPanel implements IEventHandler, IEventDispatche
 		_preiod.setForeground(_color);
 
 		_total = new JLabel();
-		_total.setFont(new Font(_total.getFont().getFontName(), Font.PLAIN, 30));
+		_total.setFont(new Font(Data.getFont(), Font.PLAIN, 30));
 		_total.setText("Total Time");
 		_total.setOpaque(false);
 		_total.setPreferredSize(new Dimension(Data.MAIN_FRAME_WIDTH, 36));

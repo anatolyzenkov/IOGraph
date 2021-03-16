@@ -86,7 +86,6 @@ public class MainFrame extends JFrame implements IEventDispatcher {
 		if (_outputPanel == null) {
 			_outputPanel = new JLayeredPane();
 			_outputPanel.setPreferredSize(new Dimension(Data.MAIN_FRAME_WIDTH, 100));
-			// _outputPanel.setLayout(new FlowLayout(0, 0, 0));
 			_outputPanel.setOpaque(false);
 		}
 		return _outputPanel;

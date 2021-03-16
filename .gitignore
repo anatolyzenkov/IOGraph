@@ -3,6 +3,10 @@
 
 # Eclipse IDE
 bin
+ant
+build
+arc
+jre
 .externalToolBuilders
 .settings
 .classpath

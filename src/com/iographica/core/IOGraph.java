@@ -1,6 +1,5 @@
 package com.iographica.core;
 
-import java.awt.Color;
 import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
 import java.awt.event.WindowAdapter;
@@ -23,7 +22,6 @@ import com.iographica.gui.ControlPanel;
 import com.iographica.gui.FrontPanel;
 import com.iographica.gui.IOGraphMenu;
 import com.iographica.gui.MainFrame;
-import com.iographica.gui.NotificationBar;
 import com.iographica.gui.SecondaryControls;
 import com.iographica.gui.TimerPanel;
 import com.iographica.gui.WelcomePanel;
@@ -51,22 +49,20 @@ public class IOGraph implements IEventHandler, IEventDispatcher {
 	private TrackManager _trackManager;
 	private ControlPanel _controlPanel;
 	private SnapshotManager _snapshotManager;
-	private TimerPanel _timerPanelBack;
 	private TimerPanel _timerPanel;
 	private SecondaryControls _secondaryControls;
 	private PanelSwaper _panelSwaper;
 	private TrackingTimer _trackingTimer;
 	private FrontPanel _frontPanel;
 	private WelcomePanel _welcomePanel;
-	private WelcomePanel _welcomePanelBack;
 	private IOGraphMenu _menu;
 	private UpdateChecker _updateChecker;
 	private ArrayList<IEventHandler> _eventHandlers;
 	private boolean _snapShotTaken;
 	private boolean _isSnapshotMultimonitored;
-	private NotificationBar _notificationBar;
 
 	public IOGraph() {
+		ImageIO.setUseCache(false);
 		// TODO: Show recording status on icon.
 		_instance = this;
 		Data.getPrefs();
@@ -80,10 +76,9 @@ public class IOGraph implements IEventHandler, IEventDispatcher {
 				exitCheck();
 			}
 		});
-
 		_trackingTimer = new TrackingTimer();
 		_trackManager = new TrackManager();
-		_mainFrame.get_outputPanel().add(_trackManager, new Integer(0));
+		_mainFrame.get_outputPanel().add(_trackManager, 0);
 
 		_snapshotManager = new SnapshotManager(_mainFrame);
 		_snapshotManager.addEventHandler(_trackManager);
@@ -106,18 +101,10 @@ public class IOGraph implements IEventHandler, IEventDispatcher {
 		_timerPanel = new TimerPanel(Data.TEXT_COLOR);
 		_timerPanel.setOpaque(false);
 		_frontPanel.add(_timerPanel);
-		_timerPanelBack = new TimerPanel(Color.WHITE);
-		_timerPanelBack.setLocation(0, 1);
-		_timerPanelBack.setOpaque(false);
-		_frontPanel.add(_timerPanelBack);
 
 		_welcomePanel = new WelcomePanel(Data.TEXT_COLOR);
 		_welcomePanel.setOpaque(false);
 		_frontPanel.add(_welcomePanel);
-		_welcomePanelBack = new WelcomePanel(Color.WHITE);
-		_welcomePanelBack.setLocation(0, 1);
-		_welcomePanelBack.setOpaque(false);
-		_frontPanel.add(_welcomePanelBack);
 
 		_menu = new IOGraphMenu();
 
@@ -148,9 +135,7 @@ public class IOGraph implements IEventHandler, IEventDispatcher {
 		_menu.addEventHandler(_trackManager);
 		_menu.addEventHandler(_trackingTimer);
 		_menu.addEventHandler(_timerPanel);
-		_menu.addEventHandler(_timerPanelBack);
 		_menu.addEventHandler(_welcomePanel);
-		_menu.addEventHandler(_welcomePanelBack);
 		_menu.addEventHandler(_controlPanel);
 		_snapshotManager.addEventHandler(_menu);
 		_controlPanel.addEventHandler(this);
@@ -159,7 +144,6 @@ public class IOGraph implements IEventHandler, IEventDispatcher {
 		_controlPanel.addEventHandler(_snapshotManager);
 		_controlPanel.addEventHandler(_trackManager);
 		_controlPanel.addEventHandler(_timerPanel);
-		_controlPanel.addEventHandler(_timerPanelBack);
 		_controlPanel.addEventHandler(_trackingTimer);
 		_secondaryControls.addEventHandler(this);
 		_secondaryControls.addEventHandler(_panelSwaper);
@@ -168,26 +152,20 @@ public class IOGraph implements IEventHandler, IEventDispatcher {
 		_trackManager.addEventHandler(_secondaryControls);
 		_trackManager.addEventHandler(_trackingTimer);
 		_trackManager.addEventHandler(_timerPanel);
-		_trackManager.addEventHandler(_timerPanelBack);
 		_trackManager.addEventHandler(_menu);
 		_timerPanel.addEventHandler(_trackingTimer);
 		_timerPanel.addEventHandler(_timerPanel);
-		_timerPanel.addEventHandler(_timerPanelBack);
 		_timerPanel.addEventHandler(_trackManager);
 		_timerPanel.addEventHandler(_welcomePanel);
-		_timerPanel.addEventHandler(_welcomePanelBack);
 		_timerPanel.addEventHandler(_menu);
 		_timerPanel.addEventHandler(_secondaryControls);
 		_trackManager.addEventHandler(_welcomePanel);
-		_trackManager.addEventHandler(_welcomePanelBack);
 		_trackingTimer.addEventHandler(_timerPanel);
-		_trackingTimer.addEventHandler(_timerPanelBack);
 		_trackingTimer.addEventHandler(_trackManager);
 		_trackingTimer.addEventHandler(this);
 		this.addEventHandler(_trackingTimer);
 		this.addEventHandler(_timerPanel);
 		this.addEventHandler(_welcomePanel);
-		this.addEventHandler(_welcomePanelBack);
 		this.addEventHandler(_trackManager);
 		this.addEventHandler(_snapshotManager);
 		this.addEventHandler(_controlPanel);
@@ -214,14 +192,12 @@ public class IOGraph implements IEventHandler, IEventDispatcher {
 		_trackManager = null;
 		_controlPanel = null;
 		_snapshotManager = null;
-		_timerPanelBack = null;
 		_timerPanel = null;
 		_secondaryControls = null;
 		_panelSwaper = null;
 		_trackingTimer = null;
 		_frontPanel = null;
 		_welcomePanel = null;
-		_welcomePanelBack = null;
 		_menu = null;
 		Data.mainFrame = null;
 		Data.mouseTrackRecording = false;
@@ -257,33 +233,9 @@ public class IOGraph implements IEventHandler, IEventDispatcher {
 		case Data.BACKGROUND_USAGE_CHANGE_REQUEST:
 			changeBackgroundUsage();
 			break;
-		case Data.TIME_CHANGED:
-			addNotificationBar();
-			break;
-		case Data.CLOSE_NOTIFICATION_BAR:
-			closeNotificationBar();
-			break;
 		default:
 			break;
 		}
-	}
-
-	private void closeNotificationBar() {
-		if (_notificationBar == null) return;
-		Data.prefs.putBoolean(Data.SHOW_DONATION_MESSAGE, false);
-	}
-
-	private void addNotificationBar() {
-		if (Data.trackingTime < 1800000) return;
-		if (!Data.prefs.getBoolean(Data.SHOW_DONATION_MESSAGE, true)) return;
-		if (_notificationBar != null) return;
-		_notificationBar = new NotificationBar();
-		_mainFrame.get_outputPanel().add(_notificationBar, new Integer(1));
-		this.addEventHandler(_notificationBar);
-		_notificationBar.addEventHandler(_notificationBar);
-		_notificationBar.addEventHandler(this);
-		_menu.addEventHandler(_notificationBar);
-		dispatchEvent(Data.OPEN_NOTIFICATION_BAR);
 	}
 
 	private void changeBackgroundUsage() {
