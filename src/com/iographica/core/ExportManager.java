@@ -4,7 +4,9 @@ import java.awt.Color;
 import java.awt.FileDialog;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
+import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 
@@ -18,6 +20,31 @@ import com.iographica.events.IOEvent;
 public class ExportManager implements IEventDispatcher {
 
 	private ArrayList<IEventHandler> _eventHandlers;
+	
+	public void export(String csv) {
+		FileDialog fd = new FileDialog(Data.mainFrame);
+		fd.setMode(FileDialog.SAVE);
+		String s = Data.period.replace(":", "-");
+		String n = "IOGraphica - " + Data.time + (Data.usePeriod ? " (" + s.substring(0, 1).toLowerCase() + s.substring(1) + ")" : "") + ".csv";
+		fd.setFile(n);
+		fd.setVisible(true);
+		if (fd.getDirectory() == null) {
+			dispatchEvent(Data.IMAGE_SAVED);
+			return;
+		}
+
+		File file = new File(fd.getDirectory(), fd.getFile());
+		BufferedWriter writer;
+		try {
+			writer = new BufferedWriter(new FileWriter(file));
+			writer.write(csv);
+		    writer.close();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		dispatchEvent(Data.IMAGE_SAVED);
+	}
 
 	public void export(BufferedImage img) {
 		BufferedImage canvas = null;

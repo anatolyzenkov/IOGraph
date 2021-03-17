@@ -50,8 +50,9 @@ public class TrackManager extends JPanel implements IEventDispatcher, IEventHand
 	public TrackManager() {
 		setOpaque(true);
 		addMouseListener(this);
-		_recordBtnPauseImage = IOGraph.getBufferedImage("PauseBtn.png");
-		_recordBtnRecordImage = IOGraph.getBufferedImage("RecordBtn.png");
+		String s = SnapshotManager.getPixelScale() == 2 ? "@2x" : "";
+		_recordBtnPauseImage = IOGraph.getBufferedImage("PauseBtn"+s+".png");
+		_recordBtnRecordImage = IOGraph.getBufferedImage("RecordBtn"+s+".png");
 		_buttonAlpha = 255;
 		_drawer = new Drawer();
 		_imageExporter = new ExportManager();
@@ -88,8 +89,8 @@ public class TrackManager extends JPanel implements IEventDispatcher, IEventHand
 		Rectangle rect = SnapshotManager.getScreenBounds(SnapshotManager.FULL_SIZE);
 		_scale = (float) Data.MAIN_FRAME_WIDTH / (float) rect.width;
 		int pHeight = (int) (rect.height * _scale);
-		_playBtnX = (int) ((Data.MAIN_FRAME_WIDTH - getButton().getWidth()) * .5);
-		_playBtnY = (int) ((pHeight - getButton().getHeight()) * .5);
+		_playBtnX = (int) ((Data.MAIN_FRAME_WIDTH - getButton().getWidth()/SnapshotManager.getPixelScale()) * .5);
+		_playBtnY = (int) ((pHeight - getButton().getHeight()/SnapshotManager.getPixelScale()) * .5);
 
 		// SETUP OVERLAY IMAGEs
 		_drawer.setupImages(rect, _scale);
@@ -148,7 +149,9 @@ public class TrackManager extends JPanel implements IEventDispatcher, IEventHand
 			float alpha = (float) _buttonAlpha / (float) 255;
 			AlphaComposite ac = AlphaComposite.getInstance(AlphaComposite.SRC_OVER,alpha);
 			((Graphics2D) g).setComposite(ac);
-			((Graphics2D) g).drawImage(getButton(), _playBtnX, _playBtnY, null);
+			((Graphics2D) g).drawImage(getButton(),
+				_playBtnX, _playBtnY, 88, 88,
+				null);
 		}
 	}
 
@@ -206,7 +209,7 @@ public class TrackManager extends JPanel implements IEventDispatcher, IEventHand
 	private void getMousePressTarget() {
 		out("TrackManager.getMousePressTarget()");
 		_pressTargetId = -1;
-		if (hitTest(_playBtnX + (int) (_recordBtnRecordImage.getWidth() * .5), _playBtnY + (int) (_recordBtnRecordImage.getHeight() * .5), PLAY_BTN_RADIUS)) {
+		if (hitTest(_playBtnX + 44, _playBtnY + 44, PLAY_BTN_RADIUS)) {
 			_pressTargetId = PLAY_BTN_ID;
 			return;
 		}
@@ -215,7 +218,7 @@ public class TrackManager extends JPanel implements IEventDispatcher, IEventHand
 	private void getMouseReleaseTarget() {
 		out("TrackManager.getMouseReleaseTarget()");
 		_releaseTargetId = -1;
-		if (hitTest(_playBtnX + (int) (_recordBtnRecordImage.getWidth() * .5), _playBtnY + (int) (_recordBtnRecordImage.getHeight() * .5), PLAY_BTN_RADIUS)) {
+		if (hitTest(_playBtnX + 44, _playBtnY + 44, PLAY_BTN_RADIUS)) {
 			_releaseTargetId = PLAY_BTN_ID;
 			return;
 		}
@@ -279,6 +282,7 @@ public class TrackManager extends JPanel implements IEventDispatcher, IEventHand
 		case Data.SAVE_IMAGE:
 			out("SAVE_IMAGE");
 			_imageExporter.export(_drawer.getImage());
+			_imageExporter.export(_drawer.getCSV());
 			break;
 		case Data.IMAGE_SAVED:
 			out("IMAGE_SAVED");

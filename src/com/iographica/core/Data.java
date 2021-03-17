@@ -14,7 +14,7 @@ import java.util.jar.JarInputStream;
 import java.util.jar.Manifest;
 import java.util.prefs.Preferences;
 import javax.swing.JFrame;
-//import com.iographica.utils.debug.gui.DebugConsole;
+import com.iographica.utils.debug.gui.DebugConsole;
 
 public class Data {
 	public static final String APPLICATION_NAME = "IOGraph"; 
@@ -95,8 +95,8 @@ public class Data {
 	private static String _version = "0.0.0";
 
 	public static void getPrefs() {
-//		_console = new DebugConsole();
-//		_console.setVisible(true);
+		DebugConsole console = new DebugConsole();
+		console.setVisible(true);
 		System.getProperties().list(System.out);
 		readManifest();
 		GraphicsEnvironment e = GraphicsEnvironment.getLocalGraphicsEnvironment();

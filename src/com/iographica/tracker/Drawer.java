@@ -10,6 +10,7 @@ import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
+import java.util.Date;
 
 import com.iographica.core.Data;
 import com.iographica.core.SnapshotManager;
@@ -28,6 +29,7 @@ class Drawer {
 	private Graphics2D _graphics2D;
 	private BufferedImage _imagePreview;
 	private Graphics2D _previewGraphics2D;
+	private String _csv; 
 	private int _pixelScale;
 
 	public Drawer() {
@@ -39,6 +41,7 @@ class Drawer {
 	}
 
 	public void setupImages(Rectangle r, float s) {
+		_csv = "x,y,time\n";
 		_pixelScale = SnapshotManager.getPixelScale();
 		RenderingHints renderHints = new RenderingHints(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 		renderHints.put(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
@@ -101,6 +104,8 @@ class Drawer {
 //		_previewGraphics2D.fillRect(0, 0, _imagePreview.getWidth(), _imagePreview.getHeight());
 		
 		Point p = MouseInfo.getPointerInfo().getLocation();
+		Date date = new Date();
+		_csv += p.x+","+p.y+","+date.getTime()+"\n";
 		_newP.x = p.x;
 		_newP.y = p.y;
 		_newP.x -= _rect.x;
@@ -200,6 +205,10 @@ class Drawer {
 	
 	public BufferedImage getImage() {
 		return _image;
+	}
+	
+	public String getCSV() {
+		return _csv;
 	}
 	
 	public void resetImages() {

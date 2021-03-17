@@ -31,7 +31,6 @@ public class SecondaryControls extends JPanel implements IEventDispatcher, IEven
 	private JCheckBox _urlBtn = null;
 	private ArrayList<IEventHandler> _eventHandlers;
 	private Timer _timer;
-	private String _saveIconJoke;
 
 	/**
 	 * This is the default constructor
@@ -74,15 +73,11 @@ public class SecondaryControls extends JPanel implements IEventDispatcher, IEven
 	private JCheckBox get_saveBtn() {
 		if (_saveBtn == null) {
 			_saveBtn = new JCheckBox();
-			_saveIconJoke = "";
-			if (System.getProperty("os.name").indexOf("Windows") != -1) {
-				//_saveIconJoke = "Win";
-			}
-			_saveBtn.setIcon(IOGraph.getIcon(SAVE_BTN+_saveIconJoke+EXTENSION));
+			_saveBtn.setIcon(IOGraph.getIcon(SAVE_BTN+EXTENSION));
 			_saveBtn.setToolTipText("Save image");
-			_saveBtn.setPressedIcon(IOGraph.getIcon(SAVE_PRESSED_BTN+_saveIconJoke+EXTENSION));
+			_saveBtn.setPressedIcon(IOGraph.getIcon(SAVE_PRESSED_BTN+EXTENSION));
 			_saveBtn.setEnabled(false);
-			_saveBtn.setDisabledIcon(IOGraph.getIcon(SAVE_DISABLED_BTN+_saveIconJoke+EXTENSION));
+			_saveBtn.setDisabledIcon(IOGraph.getIcon(SAVE_DISABLED_BTN+EXTENSION));
 			_saveBtn.addItemListener(new java.awt.event.ItemListener() {
 				public void itemStateChanged(java.awt.event.ItemEvent e) {
 					String c = "";//"C";
@@ -92,8 +87,8 @@ public class SecondaryControls extends JPanel implements IEventDispatcher, IEven
 						c = "";
 						_saveBtn.setEnabled(true);
 					}
-					_saveBtn.setIcon(IOGraph.getIcon(SAVE_BTN+_saveIconJoke+c+EXTENSION));
-					_saveBtn.setPressedIcon(IOGraph.getIcon(SAVE_PRESSED_BTN+_saveIconJoke+c+EXTENSION));
+					_saveBtn.setIcon(IOGraph.getIcon(SAVE_BTN+c+EXTENSION));
+					_saveBtn.setPressedIcon(IOGraph.getIcon(SAVE_PRESSED_BTN+c+EXTENSION));
 				}
 			});
 			setupBtn(_saveBtn);
