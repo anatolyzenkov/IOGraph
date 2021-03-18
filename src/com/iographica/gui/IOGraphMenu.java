@@ -26,7 +26,8 @@ public class IOGraphMenu extends MenuBar implements IEventDispatcher, IEventHand
 	private ArrayList<IEventHandler> _eventHandlers;
 	private MenuItem _checkForUpdateMenuItem;
 	private CheckboxMenuItem _checkForUpdateAutomaticalyMenuItem;
-	private MenuItem _saveMenuItem;
+	private MenuItem _saveImageMenuItem;
+	private MenuItem _saveCSVMenuItem;
 	private MenuItem _resetMenuItem;
 	private MenuItem _recordPauseMenuItem;
 	private CheckboxMenuItem _ignoreMouseStopsMenuItem;
@@ -40,11 +41,18 @@ public class IOGraphMenu extends MenuBar implements IEventDispatcher, IEventHand
 		MenuItem mi;
 
 		m = this.add(new Menu("File"));
-		_saveMenuItem = m.add(new MenuItem("Save...", new MenuShortcut(KeyEvent.VK_S)));
-		_saveMenuItem.setEnabled(false);
-		_saveMenuItem.addActionListener(new ActionListener() {
+		_saveImageMenuItem = m.add(new MenuItem("Save Image…", new MenuShortcut(KeyEvent.VK_S)));
+		_saveImageMenuItem.setEnabled(false);
+		_saveImageMenuItem.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				dispatchEvent(Data.SAVE_IMAGE);
+			}
+		});
+		_saveCSVMenuItem = m.add(new MenuItem("Save Raw Data…"));
+		_saveCSVMenuItem.setEnabled(false);
+		_saveCSVMenuItem.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				dispatchEvent(Data.SAVE_CSV);
 			}
 		});
 		
@@ -240,7 +248,8 @@ public class IOGraphMenu extends MenuBar implements IEventDispatcher, IEventHand
 			_checkForUpdateAutomaticalyMenuItem.setState(Data.prefs.getBoolean(Data.AUTOMATIC_UPDATE, false));
 			break;
 		case Data.START_DRAW:
-			_saveMenuItem.setEnabled(true);
+			_saveImageMenuItem.setEnabled(true);
+			_saveCSVMenuItem.setEnabled(true);
 			_recordPauseMenuItem.setLabel("Pause");
 			break;
 		case Data.STOP_DRAW:
@@ -251,7 +260,8 @@ public class IOGraphMenu extends MenuBar implements IEventDispatcher, IEventHand
 			}
 			break;
 		case Data.RESET:
-			if (!Data.mouseTrackRecording) _saveMenuItem.setEnabled(false);
+			if (!Data.mouseTrackRecording) _saveImageMenuItem.setEnabled(false);
+			if (!Data.mouseTrackRecording) _saveCSVMenuItem.setEnabled(false);
 			if (!Data.mouseTrackRecording) _resetMenuItem.setEnabled(false);
 			break;
 		case Data.RESET_ENABLED:

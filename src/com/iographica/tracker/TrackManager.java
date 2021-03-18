@@ -282,11 +282,18 @@ public class TrackManager extends JPanel implements IEventDispatcher, IEventHand
 		case Data.SAVE_IMAGE:
 			out("SAVE_IMAGE");
 			_imageExporter.export(_drawer.getImage());
+			break;
+		case Data.SAVE_CSV:
+			out("SAVE_CSV");
 			_imageExporter.export(_drawer.getCSV());
 			break;
 		case Data.IMAGE_SAVED:
 			out("IMAGE_SAVED");
 			if (event.target != this) dispatchEvent(Data.IMAGE_SAVED);
+			break;
+		case Data.CSV_SAVED:
+			out("CSV_SAVED");
+			if (event.target != this) dispatchEvent(Data.CSV_SAVED);
 			break;
 		case Data.START_DRAW:
 			_drawer.prepareForUpdate();

@@ -11,7 +11,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 
 import javax.imageio.ImageIO;
-
 import com.iographica.events.IEventDispatcher;
 import com.iographica.events.IEventHandler;
 import com.iographica.events.IOEvent;
@@ -29,10 +28,9 @@ public class ExportManager implements IEventDispatcher {
 		fd.setFile(n);
 		fd.setVisible(true);
 		if (fd.getDirectory() == null) {
-			dispatchEvent(Data.IMAGE_SAVED);
+			dispatchEvent(Data.CSV_SAVED);
 			return;
 		}
-
 		File file = new File(fd.getDirectory(), fd.getFile());
 		BufferedWriter writer;
 		try {
@@ -43,7 +41,7 @@ public class ExportManager implements IEventDispatcher {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		dispatchEvent(Data.IMAGE_SAVED);
+		dispatchEvent(Data.CSV_SAVED);
 	}
 
 	public void export(BufferedImage img) {

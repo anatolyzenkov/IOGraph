@@ -71,6 +71,8 @@ public class Data {
 	public static final int BACKGROUND_IS_UP_TO_DATE = 26;
 	public static final int CLOSE_NOTIFICATION_BAR = 27;
 	public static final int OPEN_NOTIFICATION_BAR = 28;
+	public static final int SAVE_CSV = 28;
+	public static final int CSV_SAVED = 29;
 
 	public static final float STROKE_WEIGHT = .45f;
 	public static final int FPS = 30;

@@ -30,6 +30,7 @@ class Drawer {
 	private BufferedImage _imagePreview;
 	private Graphics2D _previewGraphics2D;
 	private String _csv; 
+	private long _startTime;
 	private int _pixelScale;
 
 	public Drawer() {
@@ -42,6 +43,7 @@ class Drawer {
 
 	public void setupImages(Rectangle r, float s) {
 		_csv = "x,y,time\n";
+		_startTime = 0;
 		_pixelScale = SnapshotManager.getPixelScale();
 		RenderingHints renderHints = new RenderingHints(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 		renderHints.put(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
@@ -100,17 +102,23 @@ class Drawer {
 	}
 	
 	public Rectangle update() {
-//		_previewGraphics2D.setColor(new Color((float)Math.random(),(float)Math.random(),(float)Math.random()));
-//		_previewGraphics2D.fillRect(0, 0, _imagePreview.getWidth(), _imagePreview.getHeight());
-		
 		Point p = MouseInfo.getPointerInfo().getLocation();
-		Date date = new Date();
-		_csv += p.x+","+p.y+","+date.getTime()+"\n";
 		_newP.x = p.x;
 		_newP.y = p.y;
 		_newP.x -= _rect.x;
 		_newP.y -= _rect.y;
+		Date date = new Date();
 		boolean noMovement = _prevP.x == _newP.x && _prevP.y == _newP.y;
+		if (_startTime == 0) {
+			_startTime = date.getTime();
+			_csv += p.x+","+p.y+","+(date.getTime() - _startTime)+"\n";
+		} else {
+			if (!noMovement) {
+				_csv += p.x+","+p.y+","+(date.getTime() - _startTime)+"\n";				
+			} else {
+				_csv += ",,"+(date.getTime() - _startTime)+"\n";
+			}
+		}
 		if (!noMovement) {
 			float s = _scale;
 			int x1 = (int)(_newP.x * s);
