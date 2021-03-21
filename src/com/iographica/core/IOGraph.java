@@ -2,6 +2,7 @@ package com.iographica.core;
 
 import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
+import java.awt.SystemTray;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
@@ -21,11 +22,14 @@ import com.iographica.events.IOEvent;
 import com.iographica.gui.ControlPanel;
 import com.iographica.gui.FrontPanel;
 import com.iographica.gui.IOGraphMenu;
+import com.iographica.gui.IOGraphTrayIcon;
 import com.iographica.gui.MainFrame;
 import com.iographica.gui.SecondaryControls;
 import com.iographica.gui.TimerPanel;
 import com.iographica.gui.WelcomePanel;
 import com.iographica.tracker.TrackManager;
+import com.iographica.utils.debug.gui.DebugConsole;
+import com.iographica.utils.debug.gui.GraphicProfiler;
 
 public class IOGraph implements IEventHandler, IEventDispatcher {
 	private static IOGraph _instance = null;
@@ -56,6 +60,7 @@ public class IOGraph implements IEventHandler, IEventDispatcher {
 	private FrontPanel _frontPanel;
 	private WelcomePanel _welcomePanel;
 	private IOGraphMenu _menu;
+	private IOGraphTrayIcon _trayIcon;
 	private UpdateChecker _updateChecker;
 	private ArrayList<IEventHandler> _eventHandlers;
 	private boolean _snapShotTaken;
@@ -67,15 +72,18 @@ public class IOGraph implements IEventHandler, IEventDispatcher {
 		_instance = this;
 		Data.getPrefs();
 		Data.isOSX = System.getProperty("os.name").toLowerCase().indexOf("mac") != -1;
+		Data.isTrayGUI = Data.isOSX && SystemTray.isSupported(); 
 		_mainFrame = new MainFrame();
 		Data.mainFrame = _mainFrame;
 		_updateChecker = new UpdateChecker();
 		GraphicsDevice s = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
-		_mainFrame.addWindowListener(new WindowAdapter() {
-			public void windowClosing(WindowEvent we) {
-				exitCheck();
-			}
-		});
+		if (!Data.isTrayGUI) {
+			_mainFrame.addWindowListener(new WindowAdapter() {
+				public void windowClosing(WindowEvent we) {
+					exitCheck();
+				}
+			});
+		}
 		_trackingTimer = new TrackingTimer();
 		_trackManager = new TrackManager();
 		_mainFrame.get_outputPanel().add(_trackManager, 0);
@@ -105,8 +113,9 @@ public class IOGraph implements IEventHandler, IEventDispatcher {
 		_welcomePanel = new WelcomePanel(Data.TEXT_COLOR);
 		_welcomePanel.setOpaque(false);
 		_frontPanel.add(_welcomePanel);
-
+		
 		_menu = new IOGraphMenu();
+		_trayIcon = new IOGraphTrayIcon(_mainFrame);
 
 		_mainFrame.setLocation((int) ((s.getDisplayMode().getWidth() - _mainFrame.getWidth()) * .5), (int) ((s.getDisplayMode().getHeight() - _mainFrame.getHeight()) * .5));
 		_mainFrame.pack();
@@ -127,6 +136,7 @@ public class IOGraph implements IEventHandler, IEventDispatcher {
 
 		_panelSwaper = new PanelSwaper(_frontPanel, _controlPanel);
 		_updateChecker.addEventHandler(_menu);
+		_updateChecker.addEventHandler(_trayIcon);
 		_menu.addEventHandler(this);
 		_menu.addEventHandler(_menu);
 		_menu.addEventHandler(_secondaryControls);
@@ -137,10 +147,19 @@ public class IOGraph implements IEventHandler, IEventDispatcher {
 		_menu.addEventHandler(_timerPanel);
 		_menu.addEventHandler(_welcomePanel);
 		_menu.addEventHandler(_controlPanel);
+		_trayIcon.addEventHandler(this);
+		_trayIcon.addEventHandler(_panelSwaper);
+		_trayIcon.addEventHandler(_secondaryControls);
+		_trayIcon.addEventHandler(_trackManager);
+		_trayIcon.addEventHandler(_trackingTimer);
+		_trayIcon.addEventHandler(_timerPanel);
+		_trayIcon.addEventHandler(_welcomePanel);
+		_trayIcon.addEventHandler(_trayIcon);
 		_snapshotManager.addEventHandler(_menu);
 		_controlPanel.addEventHandler(this);
 		_controlPanel.addEventHandler(_controlPanel);
 		_controlPanel.addEventHandler(_menu);
+		_controlPanel.addEventHandler(_trayIcon);
 		_controlPanel.addEventHandler(_snapshotManager);
 		_controlPanel.addEventHandler(_trackManager);
 		_controlPanel.addEventHandler(_timerPanel);
@@ -148,18 +167,21 @@ public class IOGraph implements IEventHandler, IEventDispatcher {
 		_secondaryControls.addEventHandler(this);
 		_secondaryControls.addEventHandler(_panelSwaper);
 		_secondaryControls.addEventHandler(_trackManager);
+		_secondaryControls.addEventHandler(_trayIcon);
 		_trackManager.addEventHandler(_trackManager);
 		_trackManager.addEventHandler(_secondaryControls);
 		_trackManager.addEventHandler(_trackingTimer);
 		_trackManager.addEventHandler(_timerPanel);
 		_trackManager.addEventHandler(_menu);
+		_trackManager.addEventHandler(_trayIcon);
+		_trackManager.addEventHandler(_welcomePanel);
 		_timerPanel.addEventHandler(_trackingTimer);
 		_timerPanel.addEventHandler(_timerPanel);
 		_timerPanel.addEventHandler(_trackManager);
 		_timerPanel.addEventHandler(_welcomePanel);
 		_timerPanel.addEventHandler(_menu);
 		_timerPanel.addEventHandler(_secondaryControls);
-		_trackManager.addEventHandler(_welcomePanel);
+		_timerPanel.addEventHandler(_trayIcon);
 		_trackingTimer.addEventHandler(_timerPanel);
 		_trackingTimer.addEventHandler(_trackManager);
 		_trackingTimer.addEventHandler(this);
@@ -172,9 +194,19 @@ public class IOGraph implements IEventHandler, IEventDispatcher {
 		this.addEventHandler(_menu);
 		this.addEventHandler(this);
 		_updateChecker.check();
+		
+		if (Data.DEBUG) {
+			DebugConsole console = new DebugConsole();
+			console.setVisible(true);
+			System.getProperties().list(System.out);
+			GraphicProfiler profiler = new GraphicProfiler();
+			profiler.setVisible(true);
+			_trackManager.addEventHandler(profiler);
+		}
 	}
 
 	protected void exitCheck() {
+		System.out.println("exitCheck");
 		if (Data.trackingTime < 60000) System.exit(0);
 		String header = "Wait! Wait! Wait!";
 		int timeTreshold = 60000 * 30;

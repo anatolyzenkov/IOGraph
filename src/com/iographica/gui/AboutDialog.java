@@ -45,10 +45,7 @@ public class AboutDialog extends JDialog {
 		Calendar cal = Calendar.getInstance();
 		String t = Data.APPLICATION_NAME + " V" + Data.getApplicationVersion()
 				+ "<br><a href='"+Data.WEBSITE_URL+"'>"+Data.WEBSITE_URL+"</a>"
-				+ "<br> <a href='"+Data.ZENKOV_WEBSITE_URL+"'>Anatoly Zenkov</a> & <a href='"+Data.SHIPILOV_WEBSITE_URL+"'>Andrey Shipilov</a>, 2010" + cal.get(Calendar.YEAR) + "."
-				+ "<br>"
-				+ "<br>IOGraph is a free software supported only by&nbsp;our enthusiasm and your <a href='"+Data.DONATE_URL+"'>donations</a>. "
-				+ "<br>Join our <a href='"+Data.FACEBOOK_PAGE_URL+"'>Facebook community</a> to&nbsp;be&nbsp;up to&nbsp;date with IOGraph's timeline."
+				+ "<br> <a href='"+Data.ZENKOV_WEBSITE_URL+"'>Anatoly Zenkov</a> & <a href='"+Data.SHIPILOV_WEBSITE_URL+"'>†Andrey Shipilov</a>, " + cal.get(Calendar.YEAR) + "."
 				+ "<br>"
 				+ "<br>This programm is using SimpleAudioPlayer.java by&nbsp;Matthias Pfisterer."
 				+ "<br>"
@@ -97,6 +94,8 @@ public class AboutDialog extends JDialog {
 		bjp.setPreferredSize(new Dimension(70, 100));
 		bjp.add(jl, BorderLayout.CENTER);
 		jp.add(bjp, BorderLayout.WEST);
+		
+		pack();
 	}
 
 	@Override

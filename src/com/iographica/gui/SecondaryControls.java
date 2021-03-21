@@ -193,6 +193,9 @@ public class SecondaryControls extends JPanel implements IEventDispatcher, IEven
 		case Data.START_DRAW:
 			_saveBtn.setEnabled(true);
 			break;
+		case Data.OPEN_CONTROLS:
+			_setupBtn.setSelected(true);
+			break;
 		default:
 			break;
 		}

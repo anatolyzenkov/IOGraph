@@ -134,7 +134,7 @@ class Drawer {
 		}
 		if (Data.prefs.getBoolean(Data.IGNORE_MOUSE_STOPS, false)) {
 			_prevP.be(_newP);
-			return _updateRect;
+			return noMovement ? null : _updateRect;
 		}
 		float dx = _newP.x - _stopP.x;
 		float dy = _newP.y - _stopP.y;
@@ -142,7 +142,7 @@ class Drawer {
 		if (d < DELAY_DISTANCE_QUAD) {
 			_radius += .3;
 			_prevP.be(_newP);
-			return _updateRect;
+			return noMovement ? null : _updateRect;
 		}
 		if (_radius > RADIUS_TRESHOLD) {
 			_radius = Math.min(_radius, (float) Math.pow(_image.getHeight() * .25, 2));
@@ -224,7 +224,6 @@ class Drawer {
 		setDarkness(_previewGraphics2D);
 		_graphics2D.clearRect(0, 0, _image.getWidth(), _image.getHeight());
 		_previewGraphics2D.clearRect(0, 0, _imagePreview.getWidth(), _imagePreview.getHeight());
-		
 	}
 }
 

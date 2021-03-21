@@ -61,13 +61,19 @@ public class TrackManager extends JPanel implements IEventDispatcher, IEventHand
 			public void actionPerformed(ActionEvent e) {
 				if (Data.mouseTrackRecording) {
 					Rectangle rect = _drawer.update();
-					repaint(new Rectangle(rect.x, rect.y, rect.width, rect.height));
+					if (rect != null) {						
+						repaint(new Rectangle(rect.x, rect.y, rect.width, rect.height));
+					}
 				}
 				if (_hitTest || !Data.mouseTrackRecording) {
 					if (_buttonAlpha < 255) {
 						_buttonAlpha += 30;
 						_buttonAlpha = Math.max(0, Math.min(255, _buttonAlpha));
 						repaint(new Rectangle(_playBtnX, _playBtnY, getButton().getWidth(), getButton().getHeight()));
+					} else {
+						if (!Data.mouseTrackRecording) {
+							noLoop();
+						}
 					}
 				} else {
 					if (_buttonAlpha > 0) {
@@ -76,6 +82,7 @@ public class TrackManager extends JPanel implements IEventDispatcher, IEventHand
 						repaint(new Rectangle(_playBtnX, _playBtnY, getButton().getWidth(), getButton().getHeight()));
 					}
 				}
+				dispatchEvent(Data.TIME);
 			}
 		});
 		setup();
@@ -193,17 +200,17 @@ public class TrackManager extends JPanel implements IEventDispatcher, IEventHand
 	}
 
 	private void loop() {
-		if (!_timer.isRunning()) {
+//		if (!_timer.isRunning()) {
 			out("TrackManager.loop()");
 			_timer.start();
-		}
+//		}
 	}
 
 	private void noLoop() {
-		if (_timer.isRunning()) {
+//		if (_timer.isRunning()) {
 			out("TrackManager.noLoop()");
 			_timer.stop();
-		}
+//		}
 	}
 
 	private void getMousePressTarget() {

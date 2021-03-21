@@ -13,10 +13,11 @@ import java.util.jar.JarFile;
 import java.util.jar.JarInputStream;
 import java.util.jar.Manifest;
 import java.util.prefs.Preferences;
+
 import javax.swing.JFrame;
-import com.iographica.utils.debug.gui.DebugConsole;
 
 public class Data {
+	public static final boolean DEBUG = false;
 	public static final String APPLICATION_NAME = "IOGraph"; 
 	public static final String WEBSITE_URL = "https://iographica.com/";
 //	public static final String WEBSITE_URL = "http://localhost:8888/";
@@ -71,8 +72,9 @@ public class Data {
 	public static final int BACKGROUND_IS_UP_TO_DATE = 26;
 	public static final int CLOSE_NOTIFICATION_BAR = 27;
 	public static final int OPEN_NOTIFICATION_BAR = 28;
-	public static final int SAVE_CSV = 28;
-	public static final int CSV_SAVED = 29;
+	public static final int SAVE_CSV = 29;
+	public static final int CSV_SAVED = 30;
+	public static final int TIME = 31;
 
 	public static final float STROKE_WEIGHT = .45f;
 	public static final int FPS = 30;
@@ -91,15 +93,13 @@ public class Data {
 	public static String period = "";
 	public static long trackingTime = 0;
 	public static Boolean isOSX = false;
+	public static Boolean isTrayGUI = false;
 	public static Preferences prefs;
 	public static Boolean isCheckingForUpdates = false;
 	// private static String _version = "Not acquired from MANIFEST.MF.";
 	private static String _version = "0.0.0";
 
 	public static void getPrefs() {
-		DebugConsole console = new DebugConsole();
-		console.setVisible(true);
-		System.getProperties().list(System.out);
 		readManifest();
 		GraphicsEnvironment e = GraphicsEnvironment.getLocalGraphicsEnvironment();
 		GraphicsDevice[] a = e.getScreenDevices();
