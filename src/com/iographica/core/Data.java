@@ -7,10 +7,9 @@ import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.nio.file.Paths;
 import java.util.Properties;
 import java.util.jar.Attributes;
-import java.util.jar.JarFile;
-import java.util.jar.JarInputStream;
 import java.util.jar.Manifest;
 import java.util.prefs.Preferences;
 
@@ -18,9 +17,11 @@ import javax.swing.JFrame;
 
 public class Data {
 	public static final boolean DEBUG = false;
-	public static final String APPLICATION_NAME = "IOGraph"; 
-	public static final String WEBSITE_URL = "https://iographica.com/";
-//	public static final String WEBSITE_URL = "http://localhost:8888/";
+	public static final String APPLICATION_NAME = "IOGraph";
+	public static final String WEBSITE_PROTOCOL = "https";
+	public static final String WEBSITE_DOMAIN = "iographica.com";
+//	public static final String WEBSITE_DOMAIN = "localhost:8888";
+	public static final String WEBSITE_URL = WEBSITE_PROTOCOL + "://" + WEBSITE_DOMAIN + "/";
 	public static final String UPDATE_URL = WEBSITE_URL + "update/";
 	public static final String FAQ_URL = WEBSITE_URL + "faq/";
 	public static final String DONATE_URL = WEBSITE_URL + "donate/";
@@ -108,57 +109,62 @@ public class Data {
 	}
 
 	private static void readManifest() {
-		// TODO: Try read version from manifest from wrapped .exe.
-		Manifest manifest = null;
 		Properties props = System.getProperties();
-		String classpath = props.getProperty("java.class.path");
-		String userdir = props.getProperty("user.dir");
-		String pathtojar;
-		String s = "";
-		if (classpath.indexOf(File.separator) != -1) {
-			if (classpath.indexOf(".jar") == classpath.length() - 4) { // Executable jar double click.
-				pathtojar = "file:" + classpath;
-				JarInputStream jarStream;
-				try {
-					jarStream = new JarInputStream(new URL(pathtojar).openStream());
-					manifest = jarStream.getManifest();
-				} catch (MalformedURLException e) {
-					e.printStackTrace();
-					s = "E1 " + classpath + " " + userdir + " " + pathtojar;
-				} catch (IOException e) {
-					e.printStackTrace();
-					s = "E2 " + classpath + " " + userdir + " " + pathtojar;
-				}
-			} else { // Eclipse debug.
-				pathtojar = "file:" + userdir + File.separator + "ant/MANIFEST.MF";
-				try {
-					manifest = new Manifest(new URL(pathtojar).openStream());
-					// manifest.write(System.out);
-				} catch (MalformedURLException e) {
-					e.printStackTrace();
-					s = "E3 " + classpath + " " + userdir + " " + pathtojar;
-				} catch (IOException e) {
-					e.printStackTrace();
-					s = "E4 " + classpath + " " + userdir + " " + pathtojar;
-				}
+		System.out.println("MANIFEST READING");
+		System.out.println(props.getProperty("java.class.path"));
+		File file = new File(props.getProperty("java.class.path"));
+		String path = "";
+		URL url = null;
+		Manifest manifest = null;
+		Attributes attr = null;
+		if (file.isDirectory()) {
+			System.out.println("Not jar manifest.");
+			file = new File(Paths.get(file.toPath().toString(), "..", "ant", "MANIFEST.MF").toString());
+			if (file.exists()) {
+				path = "file:" + file.toPath().toString();
+			} else {
+				System.out.println("Manifest not exist.");
 			}
-		} else { // Jar from console.
-			pathtojar = userdir + File.separator + classpath;
+		} else {
+			System.out.println("Jar manifest. 2");
 			try {
-				JarFile jar = new JarFile(pathtojar);
-				manifest = jar.getManifest();
-				jar.close();
-			} catch (IOException e) {
-				e.printStackTrace();
-				s = "E5 " + classpath + " " + userdir + " " + pathtojar;
+				url = IOGraph.getInstance().getClass().getResource("/META-INF/MANIFEST.MF");
+				System.out.println(url.toString());
+				System.out.println(url.toString());
+				manifest = new Manifest(url.openStream());
+				System.out.println(manifest.toString());
+			} catch (MalformedURLException ue) {
+				// TODO Auto-generated catch block
+				System.out.println(ue.getLocalizedMessage());
+				ue.printStackTrace();
+			} catch (IOException ioe) {
+				// TODO Auto-generated catch block
+				System.out.println(ioe.getLocalizedMessage());
+				ioe.printStackTrace();
 			}
 		}
+		if (path.length() != 0) {
+			try {
+				url = new URL("file:" + file.toPath().toString());
+				System.out.println(url.toString());
+				manifest = new Manifest(url.openStream());
+				System.out.println(manifest.toString());
+			} catch (MalformedURLException ue) {
+				// TODO Auto-generated catch block
+				System.out.println(ue.getLocalizedMessage());
+				ue.printStackTrace();
+			} catch (IOException ioe) {
+				// TODO Auto-generated catch block
+				System.out.println(ioe.getLocalizedMessage());
+				ioe.printStackTrace();
+			}
+		}
+		
 		if (manifest == null) {
-			//_version = s;
-			System.out.println(s);
+			_version = "0.0.0";
 			return;
 		}
-		Attributes attr = manifest.getMainAttributes();
+		attr = manifest.getMainAttributes();
 		_version = attr.getValue("Specification-Version");
 		System.out.println("Specification Version: " + _version);
 	}

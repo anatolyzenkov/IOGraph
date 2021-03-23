@@ -193,16 +193,17 @@ public class IOGraph implements IEventHandler, IEventDispatcher {
 		this.addEventHandler(_controlPanel);
 		this.addEventHandler(_menu);
 		this.addEventHandler(this);
-		_updateChecker.check();
 		
 		if (Data.DEBUG) {
-			DebugConsole console = new DebugConsole();
+			DebugConsole console;
+			console = new DebugConsole();
 			console.setVisible(true);
 			System.getProperties().list(System.out);
 			GraphicProfiler profiler = new GraphicProfiler();
 			profiler.setVisible(true);
 			_trackManager.addEventHandler(profiler);
 		}
+		_updateChecker.check();
 	}
 
 	protected void exitCheck() {

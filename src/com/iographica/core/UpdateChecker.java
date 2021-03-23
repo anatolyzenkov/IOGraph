@@ -1,8 +1,10 @@
 package com.iographica.core;
 
 import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.ArrayList;
@@ -25,6 +27,7 @@ public class UpdateChecker extends Object implements IEventDispatcher, IEventHan
 	}
 
 	public void check() {
+		
 		Thread t = new Thread() {
 			public void run() {
 				String serverVersion = "";
@@ -34,26 +37,34 @@ public class UpdateChecker extends Object implements IEventDispatcher, IEventHan
 				}
 				
 				if (Data.isCheckingForUpdates) _updateConsoleFrame.setVisible(true);
+				
+				URL _iographica_website = null;
 				try {
-					URL iographica = new URL(Data.UPDATE_URL);
-					URLConnection connection = iographica.openConnection();
-					connection.setDoOutput(true);
-
-					OutputStreamWriter out = new OutputStreamWriter(connection.getOutputStream());
-					out.write("application=" + Data.APPLICATION_NAME);
-					out.write("version=" + Data.getApplicationVersion());
-					out.close();
-
-					BufferedReader in = new BufferedReader(new InputStreamReader(iographica.openStream()));
+					_iographica_website = new URL(Data.UPDATE_URL);
+				} catch (MalformedURLException mu) {
+					if (Data.isCheckingForUpdates) {
+						_updateConsoleFrame.showError();
+						System.out.println(mu.getLocalizedMessage());
+					} else {
+						dispatchEvent(Data.CHECK_FOR_UPDATES_COMPLETE);
+					}
+					return;
+				}
+				
+				try {
+					URLConnection connection = _iographica_website.openConnection();
+					InputStream stream = connection.getInputStream();
+					InputStreamReader streamReader = new InputStreamReader(stream);
+					BufferedReader in = new BufferedReader(streamReader);
 					String inputLine;
 					while ((inputLine = in.readLine()) != null) {
 						serverVersion += inputLine;
 					}
 					in.close();
-				} catch (Exception e) {
-					System.out.println("Can't get update url");
+				} catch (IOException ioe) {
 					if (Data.isCheckingForUpdates) {
 						_updateConsoleFrame.showError();
+						System.out.println(ioe.getLocalizedMessage());
 					} else {
 						dispatchEvent(Data.CHECK_FOR_UPDATES_COMPLETE);
 					}
@@ -68,6 +79,7 @@ public class UpdateChecker extends Object implements IEventDispatcher, IEventHan
 					}
 					return;
 				}
+				
 				if (!Pattern.matches("([0-9]+\\.)+[0-9]+", Data.getApplicationVersion())) {
 					if (Data.isCheckingForUpdates) {
 						_updateConsoleFrame.showError();
@@ -76,6 +88,7 @@ public class UpdateChecker extends Object implements IEventDispatcher, IEventHan
 					}
 					return;
 				}
+				
 				String[] server = serverVersion.split("\\.");
 				String[] local = Data.getApplicationVersion().split("\\.");
 				boolean upToDate = true;

@@ -13,6 +13,7 @@ import com.iographica.utils.debug.DebugOutputStream;
 public class DebugConsole extends JFrame {
 	private static final long serialVersionUID = -1863821816064278837L;
 	private DebugOutputStream taOutputStream;
+	private JTextArea ta;
 
 	public DebugConsole() {
 		// this.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
@@ -23,7 +24,7 @@ public class DebugConsole extends JFrame {
 		this.setContentPane(mainPanel);
 
 		// Create Frame
-		JTextArea ta = new JTextArea("", 20, 50);
+		ta = new JTextArea("", 20, 50);
 		ta.setLineWrap(true);
 		JScrollPane sbrText = new JScrollPane(ta);
 		sbrText.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
@@ -32,5 +33,11 @@ public class DebugConsole extends JFrame {
 		System.setOut(new PrintStream(taOutputStream));
 		pack();
 		setVisible(true);
+	}
+
+	public void out(String string) {
+		ta.append(string + "\n");
+		// TODO Auto-generated method stub
+		
 	}
 }
