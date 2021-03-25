@@ -54,19 +54,9 @@ public class MainFrame extends JFrame implements IEventDispatcher {
 		this.setTitle(Data.APPLICATION_NAME);
 		this.setSize(Data.MAIN_FRAME_WIDTH, 400);
 		this.setContentPane(get_mainPanel());
-		this.setBackground(Data.BACKGROUND_COLOR);
 		if (Data.isTrayGUI) {
 			this.setDefaultCloseOperation(WindowConstants.HIDE_ON_CLOSE);
 		}
-		this.addWindowListener(new java.awt.event.WindowAdapter() {
-			public void windowDeactivated(java.awt.event.WindowEvent e) {
-				_bottomPanel.setBackground(Data.OUT_OF_FOCUS_BACKGROUND_COLOR);
-			}
-
-			public void windowActivated(java.awt.event.WindowEvent e) {
-				_bottomPanel.setBackground(Data.BACKGROUND_COLOR);
-			}
-		});
 	}
 
 	/**
