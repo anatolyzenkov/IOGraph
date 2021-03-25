@@ -181,6 +181,7 @@ public class IOGraphTrayIcon implements IEventDispatcher, IEventHandler {
 	}
 	@Override
 	public void onEvent(IOEvent event) {
+		if (!Data.isTrayGUI) return; 
 		switch (event.type) {
 		case Data.CHECK_FOR_UPDATES_COMPLETE:
 			Data.isCheckingForUpdates = false;

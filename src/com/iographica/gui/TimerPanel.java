@@ -89,6 +89,7 @@ public class TimerPanel extends JPanel implements IEventHandler, IEventDispatche
 					_resetBox.setVisible(false);
 				}
 			}
+			break;
 		case Data.PERIOD_CHANGED:
 			if (_preiod.getText() != Data.period)
 				_preiod.setText(Data.period);
