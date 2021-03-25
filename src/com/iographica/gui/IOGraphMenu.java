@@ -41,14 +41,14 @@ public class IOGraphMenu extends MenuBar implements IEventDispatcher, IEventHand
 		MenuItem mi;
 
 		m = this.add(new Menu("File"));
-		_saveImageMenuItem = m.add(new MenuItem("Save Image…", new MenuShortcut(KeyEvent.VK_S)));
+		_saveImageMenuItem = m.add(new MenuItem("Save Image...", new MenuShortcut(KeyEvent.VK_S)));
 		_saveImageMenuItem.setEnabled(false);
 		_saveImageMenuItem.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				dispatchEvent(Data.SAVE_IMAGE);
 			}
 		});
-		_saveCSVMenuItem = m.add(new MenuItem("Save Raw Data…"));
+		_saveCSVMenuItem = m.add(new MenuItem("Save Raw Data..."));
 		_saveCSVMenuItem.setEnabled(false);
 		_saveCSVMenuItem.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
@@ -157,7 +157,7 @@ public class IOGraphMenu extends MenuBar implements IEventDispatcher, IEventHand
 		});
 
 		m = this.add(new Menu("Help"));
-		mi = m.add(new MenuItem("Get Source Code from GitHub…"));
+		mi = m.add(new MenuItem("Get Source Code from GitHub..."));
 		mi.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				WebSurfer.get(Data.GIT_REPO_URL);
@@ -190,13 +190,13 @@ public class IOGraphMenu extends MenuBar implements IEventDispatcher, IEventHand
 		});
 		m.add(_checkForUpdateAutomaticalyMenuItem);
 		m.addSeparator();
-		mi = m.add(new MenuItem("Join Our Facebook Community…"));
+		mi = m.add(new MenuItem("Join Our Facebook Community..."));
 		mi.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				WebSurfer.get(Data.FACEBOOK_PAGE_URL);
 			}
 		});
-		mi = m.add(new MenuItem("Visit IOGraphica's Website…"));
+		mi = m.add(new MenuItem("Visit IOGraphica's Website..."));
 		mi.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				WebSurfer.get(Data.WEBSITE_URL);

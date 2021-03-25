@@ -70,7 +70,7 @@ public class IOGraphTrayIcon implements IEventDispatcher, IEventHandler {
     		});
             
     		popup.addSeparator();
-            _saveImage = popup.add(new MenuItem("Save…", new MenuShortcut(KeyEvent.VK_S)));
+            _saveImage = popup.add(new MenuItem("Save...", new MenuShortcut(KeyEvent.VK_S)));
             _saveImage.setEnabled(false);
             _saveImage.addActionListener(new ActionListener() {
                 public void actionPerformed(ActionEvent e) {
@@ -99,7 +99,7 @@ public class IOGraphTrayIcon implements IEventDispatcher, IEventHandler {
             popup.add(sectionsMenu);
             MenuItem mi = null;
             
-            _saveCVS = sectionsMenu.add(new MenuItem("Save Raw Data…"));
+            _saveCVS = sectionsMenu.add(new MenuItem("Save Raw Data..."));
             _saveCVS.setEnabled(false);
             _saveCVS.addActionListener(new ActionListener() {
                 public void actionPerformed(ActionEvent e) {
