@@ -157,21 +157,21 @@ public class IOGraphMenu extends MenuBar implements IEventDispatcher, IEventHand
 		});
 
 		m = this.add(new Menu("Help"));
-		mi = m.add(new MenuItem("Get Source Code from GitHub..."));
-		mi.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				WebSurfer.get(Data.GIT_REPO_URL);
-			}
-		});
 		if (!Data.isOSX) {
-			m.addSeparator();
 			mi = m.add(new MenuItem("About IOGraph"));
 			mi.addActionListener(new ActionListener() {
 				public void actionPerformed(ActionEvent e) {
 					showAboutDialog();
 				}
 			});
+			m.addSeparator();
 		}
+		mi = m.add(new MenuItem("Get Source Code from GitHub..."));
+		mi.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				WebSurfer.get(Data.GIT_REPO_URL);
+			}
+		});
 		m.addSeparator();
 		_checkForUpdateMenuItem = m.add(new MenuItem("Check for Updates"));
 		_checkForUpdateMenuItem.setEnabled(false);
