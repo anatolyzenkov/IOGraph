@@ -8,7 +8,7 @@ IOGraph — is an application that turns mouse movements into modern art. The id
 
 ### How to do this
 
-1. [Download IOGraph](/github/v/release/:user/:repo) for your operating system.
+1. [Download IOGraph](https://github.com/anatolyzenkov/IOGraph/releases) for your operating system.
 1. Run IOGraph. It’s simple application. Just push the round button to start.
 1. Do Your Business. Minimize IOGraph and forget about it for a while.
 1. Do Art. Few hours later you’ll get your own piece of art.
