@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import atan2, pi
+from math import atan2, pi, sqrt
 from time import monotonic
 
 from PyQt6.QtCore import QPointF, QRect, QRectF, QTimer, Qt
@@ -20,13 +20,8 @@ class FloatPoint:
 
 
 class TrackCanvas(QWidget):
-    """
-    Simplified port of Java TrackManager/Drawer:
-    - читает глобальную позицию курсора
-    - рисует линии движения и круги в точках остановки
-    - сохраняет данные во внутренний CSV-буфер (на будущее экспорт)
-    """
-
+    # Java parity: Drawer constants
+    STROKE_WEIGHT = 0.45
     RADIUS_THRESHOLD = 20.0
     DELAY_DISTANCE_QUAD = 400.0
 
@@ -35,11 +30,15 @@ class TrackCanvas(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
         self.setMouseTracking(True)
 
-        self._pixmap: QPixmap | None = None
         self._desktop_rect = QRect(0, 0, 1, 1)
         self._scale: float = 1.0
         self._offset_x: float = 0.0
         self._offset_y: float = 0.0
+        self._pixel_scale: float = 1.0
+
+        # Java-like two-layer drawing model: full-size + preview-size
+        self._full_pixmap: QPixmap | None = None
+        self._preview_pixmap: QPixmap | None = None
 
         self._prev_p = FloatPoint(0.0, 0.0)
         self._new_p = FloatPoint(0.0, 0.0)
@@ -48,6 +47,7 @@ class TrackCanvas(QWidget):
 
         self._csv_lines: list[str] = ["x,y,time"]
         self._start_time: float | None = None
+        self._has_written_first_row = False
 
         self._ignore_mouse_stops: bool = False
         self._colorful_scheme: bool = False
@@ -58,7 +58,7 @@ class TrackCanvas(QWidget):
         self._last_elapsed_ms: int = 0
 
         self._timer = QTimer(self)
-        self._timer.setInterval(33)  # ~30 FPS
+        self._timer.setInterval(33)
         self._timer.timeout.connect(self._on_tick)
 
     # Public API
@@ -83,10 +83,14 @@ class TrackCanvas(QWidget):
             self.start_tracking()
 
     def reset(self) -> None:
-        if self._pixmap is not None:
-            self._pixmap.fill(Qt.GlobalColor.transparent)
+        self._ensure_buffers()
+        if self._full_pixmap is not None:
+            self._full_pixmap.fill(Qt.GlobalColor.transparent)
+        if self._preview_pixmap is not None:
+            self._preview_pixmap.fill(Qt.GlobalColor.transparent)
         self._csv_lines = ["x,y,time"]
         self._start_time = None
+        self._has_written_first_row = False
         self._last_elapsed_ms = 0
         self._radius = 0.0
         self.update()
@@ -95,29 +99,27 @@ class TrackCanvas(QWidget):
         return "\n".join(self._csv_lines) + "\n"
 
     def export_png(self, path: str) -> bool:
-        self._ensure_pixmap()
-        if self._pixmap is None:
+        self._ensure_buffers()
+        if self._full_pixmap is None:
             return False
 
-        image = QPixmap(self.size())
+        w = max(1, self._full_pixmap.width())
+        h = max(1, self._full_pixmap.height())
+        out = QPixmap(w, h)
         bg = Qt.GlobalColor.black if self._colorful_scheme else Qt.GlobalColor.white
-        image.fill(bg)
-        painter = QPainter(image)
+        out.fill(bg)
+
+        p = QPainter(out)
         try:
             if self._use_desktop_background and self._desktop_background_source is not None:
                 src = self._desktop_background_source
-                target = QRectF(
-                    self._offset_x,
-                    self._offset_y,
-                    self._desktop_rect.width() * self._scale,
-                    self._desktop_rect.height() * self._scale,
-                )
                 source = QRectF(0.0, 0.0, float(src.width()), float(src.height()))
-                painter.drawPixmap(target, src, source)
-            painter.drawPixmap(0, 0, self._pixmap)
+                target = QRectF(0.0, 0.0, float(w), float(h))
+                p.drawPixmap(target, src, source)
+            p.drawPixmap(0, 0, self._full_pixmap)
         finally:
-            painter.end()
-        return image.save(path, "PNG")
+            p.end()
+        return out.save(path, "PNG")
 
     def set_ignore_mouse_stops(self, value: bool) -> None:
         self._ignore_mouse_stops = value
@@ -136,6 +138,7 @@ class TrackCanvas(QWidget):
         self._use_multiple_monitors = value
         self._refresh_desktop_geometry()
         self._update_projection()
+        self._ensure_buffers()
         if self._use_desktop_background:
             self.update_desktop_background()
         self.update()
@@ -156,7 +159,6 @@ class TrackCanvas(QWidget):
         if shot.isNull():
             return False
         self._desktop_background_source = shot
-        self._update_projection()
         self.update()
         return True
 
@@ -172,20 +174,59 @@ class TrackCanvas(QWidget):
 
     # Internal helpers
 
-    def _ensure_pixmap(self) -> None:
-        if self._pixmap is None or self._pixmap.size() != self.size():
-            self._pixmap = QPixmap(self.size())
-            self._pixmap.fill(Qt.GlobalColor.transparent)
+    def _ensure_buffers(self) -> None:
+        self._refresh_desktop_geometry()
+        self._update_projection()
+        pixel_scale = self._get_pixel_scale()
+
+        full_w = max(1, int(round(self._desktop_rect.width() * pixel_scale)))
+        full_h = max(1, int(round(self._desktop_rect.height() * pixel_scale)))
+        prev_w = max(1, int(round(self.width() * pixel_scale)))
+        prev_h = max(1, int(round(self.height() * pixel_scale)))
+
+        full_need = (
+            self._full_pixmap is None
+            or self._full_pixmap.width() != full_w
+            or self._full_pixmap.height() != full_h
+            or abs(self._pixel_scale - pixel_scale) > 0.01
+        )
+        if full_need:
+            old = self._full_pixmap
+            self._full_pixmap = QPixmap(full_w, full_h)
+            self._full_pixmap.fill(Qt.GlobalColor.transparent)
+            if old is not None:
+                p = QPainter(self._full_pixmap)
+                try:
+                    p.drawPixmap(0, 0, old)
+                finally:
+                    p.end()
+
+        prev_need = (
+            self._preview_pixmap is None
+            or self._preview_pixmap.width() != prev_w
+            or self._preview_pixmap.height() != prev_h
+            or abs(self._pixel_scale - pixel_scale) > 0.01
+        )
+        if prev_need:
+            old = self._preview_pixmap
+            self._preview_pixmap = QPixmap(prev_w, prev_h)
+            self._preview_pixmap.setDevicePixelRatio(pixel_scale)
+            self._preview_pixmap.fill(Qt.GlobalColor.transparent)
+            if old is not None:
+                p = QPainter(self._preview_pixmap)
+                try:
+                    p.drawPixmap(0, 0, old)
+                finally:
+                    p.end()
+
+        self._pixel_scale = pixel_scale
 
     def resizeEvent(self, event) -> None:  # type: ignore[override]
         super().resizeEvent(event)
-        self._ensure_pixmap()
-        self._update_projection()
+        self._ensure_buffers()
 
     def _prepare_for_update(self) -> None:
-        self._ensure_pixmap()
-        self._refresh_desktop_geometry()
-        self._update_projection()
+        self._ensure_buffers()
         self._radius = 0.0
 
         pos = QCursor.pos()
@@ -197,47 +238,47 @@ class TrackCanvas(QWidget):
         if not self._tracking:
             return
 
+        self._ensure_buffers()
+        if self._preview_pixmap is None or self._full_pixmap is None:
+            return
+
+        if self._start_time is None:
+            self._start_time = monotonic()
+
         pos = QCursor.pos()
         self._new_p.x = float(pos.x())
         self._new_p.y = float(pos.y())
 
         dt_ms = self.get_elapsed_ms()
         self._last_elapsed_ms = dt_ms
-        no_movement = (
-            self._prev_p.x == self._new_p.x and self._prev_p.y == self._new_p.y
-        )
 
-        if no_movement:
+        no_movement = self._prev_p.x == self._new_p.x and self._prev_p.y == self._new_p.y
+        if not self._has_written_first_row:
+            self._csv_lines.append(f"{int(pos.x())},{int(pos.y())},{dt_ms}")
+            self._has_written_first_row = True
+        elif no_movement:
             self._csv_lines.append(f",,{dt_ms}")
         else:
             self._csv_lines.append(f"{int(pos.x())},{int(pos.y())},{dt_ms}")
 
         update_rect = QRect()
 
-        if not no_movement and self._pixmap is not None:
-            new_canvas = self._map_global_to_canvas(self._new_p)
-            prev_canvas = self._map_global_to_canvas(self._prev_p)
-            x1 = int(new_canvas.x())
-            y1 = int(new_canvas.y())
-            x2 = int(prev_canvas.x())
-            y2 = int(prev_canvas.y())
+        if not no_movement:
+            prev_preview = self._map_global_to_preview(self._prev_p)
+            new_preview = self._map_global_to_preview(self._new_p)
 
-            update_rect = QRect(
-                min(x1, x2) - 2,
-                min(y1, y2) - 2,
-                abs(x1 - x2) + 4,
-                abs(y1 - y2) + 4,
-            )
+            x1 = int(new_preview.x())
+            y1 = int(new_preview.y())
+            x2 = int(prev_preview.x())
+            y2 = int(prev_preview.y())
+            update_rect = QRect(min(x1, x2) - 2, min(y1, y2) - 2, abs(x1 - x2) + 4, abs(y1 - y2) + 4)
 
-            p = QPainter(self._pixmap)
-            try:
-                p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-                p.setPen(QPen(self._get_draw_color(), 1.5))
-                p.drawLine(prev_canvas, new_canvas)
-            finally:
-                p.end()
+            c = self._get_draw_color()
+            self._draw_line(self._preview_pixmap, prev_preview, new_preview, c, self.STROKE_WEIGHT * self._scale)
+            prev_full = self._map_global_to_full(self._prev_p)
+            new_full = self._map_global_to_full(self._new_p)
+            self._draw_line(self._full_pixmap, prev_full, new_full, c, self.STROKE_WEIGHT * self._pixel_scale)
 
-        # Логика "стопов" с кругами (упрощённая)
         if self._ignore_mouse_stops:
             self._prev_p.set_from(self._new_p)
             if not update_rect.isNull():
@@ -251,28 +292,24 @@ class TrackCanvas(QWidget):
         if d < self.DELAY_DISTANCE_QUAD:
             self._radius += 0.3
         else:
-            if self._radius > self.RADIUS_THRESHOLD and self._pixmap is not None:
-                radius_px = int((self._radius ** 0.5 * 2.0) * self._scale)
-                radius_px = max(1, radius_px)
-                canvas_prev = self._map_global_to_canvas(self._prev_p)
-                cx = int(canvas_prev.x())
-                cy = int(canvas_prev.y())
-                rect = QRect(
-                    cx - radius_px,
-                    cy - radius_px,
-                    radius_px * 2,
-                    radius_px * 2,
+            if self._radius > self.RADIUS_THRESHOLD:
+                max_radius = (self._desktop_rect.height() * 0.25) ** 2
+                self._radius = min(self._radius, max_radius)
+                c = self._get_draw_color()
+
+                preview_rect = self._draw_stop_ellipse(
+                    self._preview_pixmap,
+                    self._map_global_to_preview(self._prev_p),
+                    c,
+                    self._scale,
                 )
-                p = QPainter(self._pixmap)
-                try:
-                    p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-                    c = self._get_draw_color()
-                    p.setPen(QPen(c, 1.0))
-                    p.setBrush(c)
-                    p.drawEllipse(rect)
-                finally:
-                    p.end()
-                update_rect = update_rect.united(rect)
+                self._draw_stop_ellipse(
+                    self._full_pixmap,
+                    self._map_global_to_full(self._prev_p),
+                    c,
+                    1.0 * self._pixel_scale,
+                )
+                update_rect = update_rect.united(preview_rect)
 
             self._stop_p.set_from(self._new_p)
             self._radius = 0.0
@@ -280,15 +317,57 @@ class TrackCanvas(QWidget):
         self._prev_p.set_from(self._new_p)
 
         if not update_rect.isNull():
-            # redraw only affected region; Qt сам инвалидацию разрулит
             self.update(update_rect)
 
+    def _draw_line(self, pix: QPixmap, p0: QPointF, p1: QPointF, color: QColor, width: float) -> None:
+        p = QPainter(pix)
+        try:
+            p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            pen = QPen(color)
+            pen.setWidthF(max(0.01, width))
+            p.setPen(pen)
+            p.drawLine(p0, p1)
+        finally:
+            p.end()
+
+    def _draw_stop_ellipse(self, pix: QPixmap, center: QPointF, color: QColor, scale: float) -> QRect:
+        halo_d = int(max(1.0, 2.0 * self._radius * scale))
+        dot_d = int(max(1.0, 2.0 * sqrt(self._radius) * scale))
+        n = 200.0 * max(0.0, 1.0 - 2.0 * sqrt(self._radius) / self.RADIUS_THRESHOLD)
+        ch = 0 if self._colorful_scheme else 255
+        halo_color = QColor(ch, ch, ch, int(n))
+
+        hx = int(center.x() - halo_d * 0.5)
+        hy = int(center.y() - halo_d * 0.5)
+        dx = int(center.x() - dot_d * 0.5)
+        dy = int(center.y() - dot_d * 0.5)
+
+        p = QPainter(pix)
+        try:
+            p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(halo_color)
+            p.drawEllipse(hx, hy, halo_d, halo_d)
+
+            p.setPen(QPen(color, max(0.01, self.STROKE_WEIGHT * scale)))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawEllipse(hx, hy, halo_d, halo_d)
+
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(color)
+            p.drawEllipse(dx, dy, dot_d, dot_d)
+        finally:
+            p.end()
+
+        return QRect(hx - 2, hy - 2, halo_d + 4, halo_d + 4)
+
     # Painting
+
     def _get_draw_color(self) -> QColor:
         if not self._colorful_scheme:
             return QColor("black")
 
-        n = (1.0 + atan2(self._new_p.y - self._prev_p.y, self._new_p.x - self._prev_p.x) / pi)
+        n = 1.0 + atan2(self._new_p.y - self._prev_p.y, self._new_p.x - self._prev_p.x) / pi
         n = (n + 0.25) % 1.0
         colors = (QColor(255, 255, 0), QColor(0, 255, 255), QColor(255, 0, 255))
         idx = int(len(colors) * n)
@@ -302,11 +381,13 @@ class TrackCanvas(QWidget):
         return QColor(r, g, b)
 
     def paintEvent(self, event: QPaintEvent) -> None:  # type: ignore[override]
-        self._ensure_pixmap()
-        painter = QPainter(self)
+        self._ensure_buffers()
+
+        p = QPainter(self)
         try:
             bg = Qt.GlobalColor.black if self._colorful_scheme else Qt.GlobalColor.white
-            painter.fillRect(self.rect(), bg)
+            p.fillRect(self.rect(), bg)
+
             if self._use_desktop_background and self._desktop_background_source is not None:
                 src = self._desktop_background_source
                 target = QRectF(
@@ -316,24 +397,28 @@ class TrackCanvas(QWidget):
                     self._desktop_rect.height() * self._scale,
                 )
                 source = QRectF(0.0, 0.0, float(src.width()), float(src.height()))
-                painter.drawPixmap(target, src, source)
-            if self._pixmap is not None:
-                painter.drawPixmap(0, 0, self._pixmap)
+                p.drawPixmap(target, src, source)
+
+            if self._preview_pixmap is not None:
+                p.drawPixmap(0, 0, self._preview_pixmap)
         finally:
-            painter.end()
+            p.end()
 
     def _refresh_desktop_geometry(self) -> None:
         screens = QGuiApplication.screens()
         if not screens:
             self._desktop_rect = QRect(0, 0, max(1, self.width()), max(1, self.height()))
             return
+
         if self._use_multiple_monitors:
             union_rect = QRect(screens[0].geometry())
             for s in screens[1:]:
                 union_rect = union_rect.united(s.geometry())
             self._desktop_rect = union_rect
             return
-        self._desktop_rect = screens[0].geometry()
+
+        primary = QGuiApplication.primaryScreen() or screens[0]
+        self._desktop_rect = primary.geometry()
 
     def _update_projection(self) -> None:
         width = max(1, self.width())
@@ -346,7 +431,18 @@ class TrackCanvas(QWidget):
         self._offset_x = (width - dw * self._scale) * 0.5
         self._offset_y = (height - dh * self._scale) * 0.5
 
-    def _map_global_to_canvas(self, p: FloatPoint) -> QPointF:
+    def _map_global_to_preview(self, p: FloatPoint) -> QPointF:
         x = (p.x - self._desktop_rect.x()) * self._scale + self._offset_x
         y = (p.y - self._desktop_rect.y()) * self._scale + self._offset_y
         return QPointF(x, y)
+
+    def _map_global_to_full(self, p: FloatPoint) -> QPointF:
+        x = (p.x - self._desktop_rect.x()) * self._pixel_scale
+        y = (p.y - self._desktop_rect.y()) * self._pixel_scale
+        return QPointF(x, y)
+
+    def _get_pixel_scale(self) -> float:
+        screen = self.screen() or QGuiApplication.primaryScreen()
+        if screen is None:
+            return 1.0
+        return 2.0 if screen.devicePixelRatio() >= 1.5 else 1.0
