@@ -128,6 +128,9 @@ class TrackCanvas(QWidget):
         self._colorful_scheme = value
         self.update()
 
+    def is_colorful_scheme(self) -> bool:
+        return self._colorful_scheme
+
     def set_use_desktop_background(self, value: bool) -> None:
         self._use_desktop_background = value
         if value and self._desktop_background_source is None:
@@ -143,22 +146,48 @@ class TrackCanvas(QWidget):
             self.update_desktop_background()
         self.update()
 
+    def is_use_multiple_monitors(self) -> bool:
+        return self._use_multiple_monitors
+
     def update_desktop_background(self) -> bool:
-        screen = QGuiApplication.primaryScreen()
-        if screen is None:
+        screens = QGuiApplication.screens()
+        if not screens:
             return False
 
         self._refresh_desktop_geometry()
-        shot = screen.grabWindow(
-            0,
-            self._desktop_rect.x(),
-            self._desktop_rect.y(),
-            self._desktop_rect.width(),
-            self._desktop_rect.height(),
-        )
-        if shot.isNull():
-            return False
-        self._desktop_background_source = shot
+        base = QPixmap(self._desktop_rect.width(), self._desktop_rect.height())
+        base.fill(Qt.GlobalColor.black)
+
+        painter = QPainter(base)
+        try:
+            if self._use_multiple_monitors:
+                for screen in screens:
+                    s_rect = screen.geometry()
+                    shot = screen.grabWindow(0)
+                    if shot.isNull():
+                        continue
+                    painter.drawPixmap(
+                        s_rect.x() - self._desktop_rect.x(),
+                        s_rect.y() - self._desktop_rect.y(),
+                        shot,
+                    )
+            else:
+                screen = self._get_single_screen()
+                if screen is None:
+                    return False
+                s_rect = screen.geometry()
+                shot = screen.grabWindow(0)
+                if shot.isNull():
+                    return False
+                painter.drawPixmap(
+                    s_rect.x() - self._desktop_rect.x(),
+                    s_rect.y() - self._desktop_rect.y(),
+                    shot,
+                )
+        finally:
+            painter.end()
+
+        self._desktop_background_source = base
         self.update()
         return True
 
@@ -324,15 +353,15 @@ class TrackCanvas(QWidget):
         try:
             p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
             pen = QPen(color)
-            pen.setWidthF(max(0.01, width))
+            pen.setWidthF(max(0.0, width))
             p.setPen(pen)
             p.drawLine(p0, p1)
         finally:
             p.end()
 
     def _draw_stop_ellipse(self, pix: QPixmap, center: QPointF, color: QColor, scale: float) -> QRect:
-        halo_d = int(max(1.0, 2.0 * self._radius * scale))
-        dot_d = int(max(1.0, 2.0 * sqrt(self._radius) * scale))
+        halo_d = int(2.0 * self._radius * scale)
+        dot_d = int(2.0 * sqrt(self._radius) * scale)
         n = 200.0 * max(0.0, 1.0 - 2.0 * sqrt(self._radius) / self.RADIUS_THRESHOLD)
         ch = 0 if self._colorful_scheme else 255
         halo_color = QColor(ch, ch, ch, int(n))
@@ -349,7 +378,7 @@ class TrackCanvas(QWidget):
             p.setBrush(halo_color)
             p.drawEllipse(hx, hy, halo_d, halo_d)
 
-            p.setPen(QPen(color, max(0.01, self.STROKE_WEIGHT * scale)))
+            p.setPen(QPen(color, max(0.0, self.STROKE_WEIGHT * scale)))
             p.setBrush(Qt.BrushStyle.NoBrush)
             p.drawEllipse(hx, hy, halo_d, halo_d)
 
@@ -446,3 +475,9 @@ class TrackCanvas(QWidget):
         if screen is None:
             return 1.0
         return 2.0 if screen.devicePixelRatio() >= 1.5 else 1.0
+
+    def _get_single_screen(self):
+        screens = QGuiApplication.screens()
+        if not screens:
+            return None
+        return QGuiApplication.primaryScreen() or screens[0]

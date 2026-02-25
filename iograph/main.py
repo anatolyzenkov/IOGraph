@@ -1,6 +1,7 @@
 from pathlib import Path
 from datetime import datetime
 import webbrowser
+from math import cos, pi
 
 from PyQt6.QtCore import QEvent, QSettings, QSize, Qt, QTimer
 from PyQt6.QtGui import QAction, QCursor, QFont, QGuiApplication, QIcon
@@ -16,7 +17,6 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
-    QStackedWidget,
     QSystemTrayIcon,
     QVBoxLayout,
     QWidget,
@@ -28,6 +28,7 @@ from .tracker import TrackCanvas
 
 class MainWindow(QMainWindow):
     MAIN_FRAME_WIDTH = 465
+    PANEL_HEIGHT = 66
     _MONTH_NAMES = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
     _RESOURCE_DIR = Path(__file__).resolve().parent / "resources"
     _APP_ICON_FILES = ("icon16.png", "icon32.png", "icon64.png", "icon128.png", "icon256.png", "icon512.png")
@@ -42,10 +43,18 @@ class MainWindow(QMainWindow):
         self._session_ended_at: datetime | None = None
         self._suppress_option_handlers = False
         self._force_quit_requested = False
+        self._pending_snapshot_restore_visible = False
+        self._pending_snapshot_restore_minimized = False
         self._setup_auto_hide_timer = QTimer(self)
         self._setup_auto_hide_timer.setSingleShot(True)
         self._setup_auto_hide_timer.setInterval(10000)
         self._setup_auto_hide_timer.timeout.connect(lambda: self._setup_btn.setChecked(False))
+        self._panel_anim_timer = QTimer(self)
+        self._panel_anim_timer.setInterval(20)
+        self._panel_anim_timer.timeout.connect(self._on_panel_anim_tick)
+        self._panel_anim_count = 0
+        self._panel_anim_direction = 0
+        self._panel_anim_max = 30
         self.setWindowTitle("IOGraph (Python)")
         self.setFixedWidth(self.MAIN_FRAME_WIDTH)
         self.setWindowIcon(self._app_icon())
@@ -59,19 +68,20 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._canvas, stretch=1)
 
         self._bottom_panel = QWidget(self)
-        self._bottom_panel.setFixedHeight(66)
+        self._bottom_panel.setFixedHeight(self.PANEL_HEIGHT)
         bottom_layout = QHBoxLayout(self._bottom_panel)
-        bottom_layout.setContentsMargins(8, 6, 8, 6)
-        bottom_layout.setSpacing(8)
+        bottom_layout.setContentsMargins(6, 0, 6, 0)
+        bottom_layout.setSpacing(0)
         layout.addWidget(self._bottom_panel, stretch=0)
 
-        self._panels_stack = QStackedWidget(self._bottom_panel)
-        self._front_panel = QWidget(self._bottom_panel)
-        self._control_panel = QWidget(self._bottom_panel)
-        self._panels_stack.addWidget(self._front_panel)
-        self._panels_stack.addWidget(self._control_panel)
-        self._panels_stack.setCurrentWidget(self._front_panel)
-        bottom_layout.addWidget(self._panels_stack, stretch=1)
+        self._panels_viewport = QWidget(self._bottom_panel)
+        self._panels_viewport.setContentsMargins(0, 0, 0, 0)
+        self._panels_viewport.setFixedHeight(self.PANEL_HEIGHT)
+        self._panels_viewport.installEventFilter(self)
+        bottom_layout.addWidget(self._panels_viewport, stretch=1)
+
+        self._front_panel = QWidget(self._panels_viewport)
+        self._control_panel = QWidget(self._panels_viewport)
 
         self._toggle_btn = QPushButton(self._canvas)
         self._toggle_btn.setCheckable(True)
@@ -93,16 +103,17 @@ class MainWindow(QMainWindow):
         self._toggle_fade_timer.start()
 
         front_layout = QVBoxLayout(self._front_panel)
-        front_layout.setContentsMargins(0, 0, 0, 0)
-        front_layout.setSpacing(2)
+        front_layout.setContentsMargins(28, 5, 0, 5)
+        front_layout.setSpacing(0)
 
         top_row = QHBoxLayout()
         top_row.setContentsMargins(0, 0, 0, 0)
-        top_row.setSpacing(2)
+        top_row.setSpacing(5)
         front_layout.addLayout(top_row)
 
         self._total_time_label = QLabel("Total Time", self._front_panel)
         self._total_time_label.setFont(QFont(self._total_time_label.font().family(), 30))
+        self._total_time_label.setFixedHeight(36)
         self._total_time_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self._total_time_label.setVisible(False)
         top_row.addStretch(1)
@@ -111,10 +122,10 @@ class MainWindow(QMainWindow):
         self._reset_btn = QPushButton(self._front_panel)
         self._reset_btn.clicked.connect(self._reset_canvas)
         self._reset_btn.setVisible(False)
-        self._reset_btn.setFixedSize(29, 23)
+        self._reset_btn.setFixedSize(19, 28)
         self._reset_btn.setIconSize(QSize(19, 19))
         self._reset_btn.setFlat(True)
-        self._reset_btn.setStyleSheet("QPushButton { border: none; background: transparent; }")
+        self._reset_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding-top: 8px; }")
         self._reset_btn.setIcon(self._icon("ResetBtn.png"))
         self._reset_btn.pressed.connect(lambda: self._reset_btn.setIcon(self._icon("ResetPressedBtn.png")))
         self._reset_btn.released.connect(lambda: self._reset_btn.setIcon(self._icon("ResetBtn.png")))
@@ -124,21 +135,24 @@ class MainWindow(QMainWindow):
 
         self._period_label = QLabel("Time Period", self._front_panel)
         self._period_label.setFont(QFont(self._period_label.font().family(), 12))
+        self._period_label.setFixedHeight(18)
         self._period_label.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
         self._period_label.setVisible(False)
         front_layout.addWidget(self._period_label, stretch=0)
+        front_layout.setAlignment(self._period_label, Qt.AlignmentFlag.AlignTop)
 
         control_layout = QGridLayout(self._control_panel)
-        control_layout.setContentsMargins(0, 0, 0, 0)
+        control_layout.setContentsMargins(10, 0, 0, 0)
         control_layout.setHorizontalSpacing(16)
         control_layout.setVerticalSpacing(2)
 
         self._ignore_stops_box = QCheckBox("Ignore Mouse Stops", self._control_panel)
+        control_layout.setAlignment(self._ignore_stops_box, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         control_layout.addWidget(self._ignore_stops_box, 0, 0)
         desktop_row = QWidget(self._control_panel)
         desktop_row_layout = QHBoxLayout(desktop_row)
         desktop_row_layout.setContentsMargins(0, 0, 0, 0)
-        desktop_row_layout.setSpacing(1)
+        desktop_row_layout.setSpacing(6)
         self._use_desktop_box = QCheckBox("Use Desktop", desktop_row)
         desktop_row_layout.addWidget(self._use_desktop_box, 0)
         self._update_desktop_btn = QPushButton(desktop_row)
@@ -153,15 +167,24 @@ class MainWindow(QMainWindow):
         self._update_desktop_btn.setVisible(False)
         desktop_row_layout.addWidget(self._update_desktop_btn, 0)
         desktop_row_layout.addStretch(1)
+        control_layout.setAlignment(desktop_row, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         control_layout.addWidget(desktop_row, 0, 1)
         self._multi_monitor_box = QCheckBox("Use Multiple Monitors", self._control_panel)
+        control_layout.setAlignment(self._multi_monitor_box, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         control_layout.addWidget(self._multi_monitor_box, 1, 0)
-        self._colorful_box = QCheckBox("Use Colourful Scheme", self._control_panel)
-        control_layout.addWidget(self._colorful_box, 1, 1)
+        colorful_row = QWidget(self._control_panel)
+        colorful_row_layout = QHBoxLayout(colorful_row)
+        colorful_row_layout.setContentsMargins(0, 0, 0, 0)
+        colorful_row_layout.setSpacing(0)
+        self._colorful_box = QCheckBox("Use Colourful Scheme", colorful_row)
+        colorful_row_layout.addWidget(self._colorful_box, 0)
+        colorful_row_layout.addStretch(1)
+        control_layout.setAlignment(colorful_row, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        control_layout.addWidget(colorful_row, 1, 1)
 
         self._secondary_panel = QWidget(self._bottom_panel)
         secondary_layout = QVBoxLayout(self._secondary_panel)
-        secondary_layout.setContentsMargins(0, 0, 0, 0)
+        secondary_layout.setContentsMargins(0, 5, 0, 10)
         secondary_layout.setSpacing(4)
         self._save_btn = QPushButton(self._secondary_panel)
         self._save_btn.clicked.connect(self._save_image)
@@ -197,6 +220,9 @@ class MainWindow(QMainWindow):
         secondary_layout.addWidget(self._url_btn)
         bottom_layout.addWidget(self._secondary_panel, stretch=0)
 
+        self._resize_panels_for_viewport()
+        self._update_panel_positions()
+
         self.setCentralWidget(central)
         self._setup_actions()
         self._bind_control_panel()
@@ -214,7 +240,7 @@ class MainWindow(QMainWindow):
         self._refresh_dpi_dependent_icons()
         self._position_toggle_button()
         self._sync_ui_state()
-        self.statusBar().showMessage("Ready")
+        self._status("Ready")
 
     def _setup_actions(self) -> None:
         file_menu = self.menuBar().addMenu("&File")
@@ -381,7 +407,7 @@ class MainWindow(QMainWindow):
         self._period_label.setVisible(False)
         self._reset_btn.setVisible(False)
         self._sync_ui_state()
-        self.statusBar().showMessage("Canvas reset")
+        self._status("Canvas reset")
 
     def _save_image(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
@@ -396,7 +422,7 @@ class MainWindow(QMainWindow):
         if image_path.suffix.lower() != ".png":
             image_path = image_path.with_suffix(".png")
         ok = self._canvas.export_png(str(image_path))
-        self.statusBar().showMessage("Image saved" if ok else "Failed to save image")
+        self._status("Image saved" if ok else "Failed to save image")
         self._sync_ui_state()
 
     def _save_csv(self) -> None:
@@ -412,7 +438,7 @@ class MainWindow(QMainWindow):
         if csv_path.suffix.lower() != ".csv":
             csv_path = csv_path.with_suffix(".csv")
         csv_path.write_text(self._canvas.export_csv_text(), encoding="utf-8")
-        self.statusBar().showMessage("CSV saved")
+        self._status("CSV saved")
         self._sync_ui_state()
 
     def _on_use_desktop_toggled(self, checked: bool) -> None:
@@ -426,16 +452,43 @@ class MainWindow(QMainWindow):
         if checked:
             self._refresh_desktop_snapshot()
         else:
-            self.statusBar().showMessage("Desktop background disabled")
+            self._status("Desktop background disabled")
 
     def _refresh_desktop_snapshot(self) -> None:
+        # Two-phase hide/capture: handles startup case when window becomes visible after scheduling.
+        self._pending_snapshot_restore_visible = self.isVisible()
+        self._pending_snapshot_restore_minimized = self.isMinimized()
+        if self._pending_snapshot_restore_visible:
+            self.hide()
+            QApplication.processEvents()
+        QTimer.singleShot(40, self._capture_desktop_snapshot_hidden)
+
+    def _capture_desktop_snapshot_hidden(self) -> None:
+        if self.isVisible():
+            # Startup path: window may become visible after initial scheduling.
+            self._pending_snapshot_restore_visible = True
+            self._pending_snapshot_restore_minimized = self.isMinimized()
+            self.hide()
+            QApplication.processEvents()
+            QTimer.singleShot(160, self._capture_desktop_snapshot_final)
+            return
+        QTimer.singleShot(160, self._capture_desktop_snapshot_final)
+
+    def _capture_desktop_snapshot_final(self) -> None:
         ok = self._canvas.update_desktop_background()
-        self.statusBar().showMessage(
-            "Desktop snapshot updated" if ok else "Failed to capture desktop snapshot"
-        )
+        if self._pending_snapshot_restore_visible:
+            if self._pending_snapshot_restore_minimized:
+                self.showMinimized()
+            else:
+                self.showNormal()
+                self.raise_()
+                self.activateWindow()
+        self._status("Desktop snapshot updated" if ok else "Failed to capture desktop snapshot")
 
     def _on_multi_monitor_toggled(self, checked: bool) -> None:
         if self._suppress_option_handlers:
+            return
+        if checked == self._canvas.is_use_multiple_monitors():
             return
         if self._canvas.get_elapsed_ms() > 0:
             ok = self._confirm_reset_for_switch(
@@ -458,15 +511,27 @@ class MainWindow(QMainWindow):
         use_multi_monitor = self._settings.value("options/use_multiple_monitors", True, bool)
         auto_update = self._settings.value("options/automatic_update", False, bool)
 
-        self._ignore_stops_action.setChecked(ignore_stops)
-        self._colorful_action.setChecked(colorful)
-        self._multi_monitor_action.setChecked(use_multi_monitor)
-        self._use_desktop_action.setChecked(use_desktop)
+        # Apply to runtime first (source of truth), then mirror in UI without signal side-effects.
+        self._canvas.set_ignore_mouse_stops(ignore_stops)
+        self._canvas.set_colorful_scheme(colorful)
+        self._canvas.set_use_multiple_monitors(use_multi_monitor)
+        self._canvas.set_use_desktop_background(use_desktop)
+
+        self._set_checked_silent(self._ignore_stops_action, ignore_stops)
+        self._set_checked_silent(self._ignore_stops_box, ignore_stops)
+        self._set_checked_silent(self._colorful_action, colorful)
+        self._set_checked_silent(self._colorful_box, colorful)
+        self._set_checked_silent(self._multi_monitor_action, use_multi_monitor)
+        self._set_checked_silent(self._multi_monitor_box, use_multi_monitor)
+        self._set_checked_silent(self._use_desktop_action, use_desktop)
+        self._set_checked_silent(self._use_desktop_box, use_desktop)
+
         self._refresh_desktop_action.setEnabled(use_desktop)
         self._update_desktop_btn.setVisible(use_desktop)
         self._update_desktop_btn.setEnabled(use_desktop)
         self._update_update_desktop_icon()
-        self._canvas.set_use_multiple_monitors(use_multi_monitor)
+        if use_desktop:
+            self._refresh_desktop_snapshot()
         self._set_auto_update_state(auto_update)
         self._sync_ui_state()
 
@@ -517,16 +582,17 @@ class MainWindow(QMainWindow):
             self._canvas.start_tracking()
             self._toggle_btn.setChecked(True)
             self._sync_ui_state()
-            self.statusBar().showMessage("Tracking started")
+            self._status("Tracking started")
             return
         self._canvas.stop_tracking()
         self._session_ended_at = datetime.now()
         self._toggle_btn.setChecked(False)
         self._sync_ui_state()
-        self.statusBar().showMessage("Tracking stopped")
+        self._status("Tracking stopped")
 
     def _toggle_setup_panel(self, checked: bool) -> None:
-        self._panels_stack.setCurrentWidget(self._control_panel if checked else self._front_panel)
+        self._panel_anim_direction = 1 if checked else -1
+        self._panel_anim_timer.start()
         self._setup_btn.setIcon(self._icon("SetupBtnC.png" if checked else "SetupBtn.png"))
         self._update_tray_state()
 
@@ -538,8 +604,7 @@ class MainWindow(QMainWindow):
         self._bottom_panel.setFixedWidth(self.MAIN_FRAME_WIDTH)
         self.adjustSize()
         menu_h = self.menuBar().sizeHint().height() if self.menuBar() is not None else 0
-        status_h = self.statusBar().sizeHint().height() if self.statusBar().isVisible() else 0
-        total_h = menu_h + preview_height + self._bottom_panel.height() + status_h
+        total_h = menu_h + preview_height + self._bottom_panel.height()
         self.setFixedSize(self.MAIN_FRAME_WIDTH, total_h)
         self._refresh_dpi_dependent_icons()
         self._position_toggle_button()
@@ -616,6 +681,9 @@ class MainWindow(QMainWindow):
                 self._position_toggle_button()
             elif event_type in (QEvent.Type.MouseMove, QEvent.Type.Enter, QEvent.Type.Leave):
                 self._update_toggle_hover_state()
+        elif obj is self._panels_viewport and event.type() == QEvent.Type.Resize:
+            self._resize_panels_for_viewport()
+            self._update_panel_positions()
         return super().eventFilter(obj, event)
 
     def _position_toggle_button(self) -> None:
@@ -720,6 +788,8 @@ class MainWindow(QMainWindow):
     def _on_colorful_toggled(self, checked: bool) -> None:
         if self._suppress_option_handlers:
             return
+        if checked == self._canvas.is_colorful_scheme():
+            return
         if self._canvas.get_elapsed_ms() > 0:
             ok = self._confirm_reset_for_switch(
                 "Color Scheme Switch Confirmation",
@@ -785,9 +855,46 @@ class MainWindow(QMainWindow):
         finally:
             self._suppress_option_handlers = False
 
+    @staticmethod
+    def _set_checked_silent(widget, value: bool) -> None:
+        prev = widget.blockSignals(True)
+        try:
+            widget.setChecked(value)
+        finally:
+            widget.blockSignals(prev)
+
     def _request_quit(self) -> None:
         self._force_quit_requested = True
         self.close()
+
+    def _on_panel_anim_tick(self) -> None:
+        self._panel_anim_count += self._panel_anim_direction
+        self._panel_anim_count = max(0, min(self._panel_anim_max, self._panel_anim_count))
+        if self._panel_anim_direction == 1 and self._panel_anim_count == self._panel_anim_max:
+            self._panel_anim_timer.stop()
+        elif self._panel_anim_direction == -1 and self._panel_anim_count == 0:
+            self._panel_anim_timer.stop()
+        self._update_panel_positions()
+
+    def _update_panel_positions(self) -> None:
+        n = self._smooth(self._panel_anim_count / self._panel_anim_max, 1.0)
+        y_front = -int(self.PANEL_HEIGHT * n)
+        y_control = int(self.PANEL_HEIGHT * (1.0 - n))
+        self._front_panel.move(0, y_front)
+        self._control_panel.move(0, y_control)
+
+    def _resize_panels_for_viewport(self) -> None:
+        w = max(1, self._panels_viewport.width())
+        h = self.PANEL_HEIGHT
+        self._front_panel.setGeometry(0, self._front_panel.y(), w, h)
+        self._control_panel.setGeometry(0, self._control_panel.y(), w, h)
+
+    @staticmethod
+    def _smooth(n: float, f: float) -> float:
+        f = max(0.6, f)
+        if n < 0.5:
+            return ((1.0 - cos(pi * n)) ** f) * 0.5
+        return 0.5 + (1.0 - (1.0 - cos(pi * (1.0 - n))) ** f) * 0.5
 
     def _open_url(self, url: str) -> None:
         webbrowser.open(url)
@@ -800,7 +907,11 @@ class MainWindow(QMainWindow):
         )
 
     def _check_for_updates_placeholder(self) -> None:
-        self.statusBar().showMessage("Check for updates is not implemented yet")
+        self._status("Check for updates is not implemented yet")
+
+    def _status(self, _message: str) -> None:
+        # Java version has no Qt status bar; keep this as no-op to avoid affecting layout height.
+        return
 
     def _on_auto_update_toggled(self, checked: bool) -> None:
         if self._suppress_option_handlers:
