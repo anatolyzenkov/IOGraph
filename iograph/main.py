@@ -2,8 +2,9 @@ from pathlib import Path
 from datetime import datetime
 import webbrowser
 from math import cos, pi
+import json
 
-from PyQt6.QtCore import QEvent, QSettings, QSize, Qt, QTimer
+from PyQt6.QtCore import QEvent, QSettings, QSize, Qt, QTimer, QStandardPaths
 from PyQt6.QtGui import QAction, QCursor, QFont, QGuiApplication, QIcon
 from PyQt6.QtWidgets import (
     QApplication,
@@ -35,6 +36,7 @@ class MainWindow(QMainWindow):
     _GITHUB_URL = "https://github.com/anatolyzenkov/iograph"
     _FACEBOOK_URL = "https://www.facebook.com/pages/IOGraphica/317794951637"
     _WEBSITE_URL = "https://iographica.com/"
+    _SESSION_STATE_FILE = "session_state.json"
 
     def __init__(self) -> None:
         super().__init__()
@@ -236,6 +238,7 @@ class MainWindow(QMainWindow):
         self._bind_control_panel()
         self._load_settings()
         self._apply_window_geometry()
+        self._load_session_state()
         self._ui_timer = QTimer(self)
         self._ui_timer.setInterval(1000)
         self._ui_timer.timeout.connect(self._update_timer_label)
@@ -247,6 +250,7 @@ class MainWindow(QMainWindow):
         self._setup_tray()
         self._refresh_dpi_dependent_icons()
         self._position_toggle_button()
+        self._set_tracking(True)
         self._sync_ui_state()
         self._status("Ready")
 
@@ -403,6 +407,7 @@ class MainWindow(QMainWindow):
     def _perform_reset(self) -> None:
         is_tracking = self._canvas.is_tracking()
         self._canvas.reset()
+        self._clear_session_state()
         if is_tracking:
             self._session_started_at = datetime.now()
             self._session_ended_at = None
@@ -517,23 +522,11 @@ class MainWindow(QMainWindow):
             return
         if checked == self._canvas.is_use_multiple_monitors():
             return
-        if self._canvas.get_elapsed_ms() > 0:
-            ok = self._confirm_reset_for_switch(
-                "Switch Confirmation",
-                "We need to reset tracking when switching between single/multiple monitors.\nDo you want to start from scratch?",
-            )
-            if not ok:
-                self._defer_restore_option_from_runtime(
-                    self._multi_monitor_action,
-                    self._multi_monitor_box,
-                    self._canvas.is_use_multiple_monitors(),
-                )
-                return
         self._canvas.set_use_multiple_monitors(checked)
         if self._use_desktop_action.isChecked():
             self._refresh_desktop_snapshot()
-        self._perform_reset()
         self._apply_window_geometry()
+        self._sync_ui_state()
 
     def _load_settings(self) -> None:
         ignore_stops = self._settings.value("options/ignore_mouse_stops", False, bool)
@@ -573,6 +566,65 @@ class MainWindow(QMainWindow):
         self._settings.setValue("options/use_desktop_background", self._use_desktop_action.isChecked())
         self._settings.setValue("options/automatic_update", self._auto_update_action.isChecked())
 
+    def _session_state_path(self) -> Path:
+        base = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation)
+        if not base:
+            return Path.home() / ".iograph" / self._SESSION_STATE_FILE
+        return Path(base) / self._SESSION_STATE_FILE
+
+    def _save_session_state(self) -> None:
+        state = {
+            "version": 1,
+            "session_started_at": self._session_started_at.isoformat() if self._session_started_at else None,
+            "session_ended_at": self._session_ended_at.isoformat() if self._session_ended_at else None,
+            "raw_samples": self._canvas.export_raw_samples(),
+        }
+        path = self._session_state_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+
+    def _load_session_state(self) -> None:
+        path = self._session_state_path()
+        if not path.exists():
+            return
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return
+        if not isinstance(payload, dict):
+            return
+
+        raw_samples = payload.get("raw_samples", [])
+        if isinstance(raw_samples, list):
+            self._canvas.load_raw_samples(raw_samples)
+
+        started_raw = payload.get("session_started_at")
+        ended_raw = payload.get("session_ended_at")
+        if isinstance(started_raw, str):
+            try:
+                self._session_started_at = datetime.fromisoformat(started_raw)
+            except ValueError:
+                self._session_started_at = None
+        if isinstance(ended_raw, str):
+            try:
+                self._session_ended_at = datetime.fromisoformat(ended_raw)
+            except ValueError:
+                self._session_ended_at = None
+
+        if self._session_started_at is None and self._canvas.get_elapsed_ms() > 0:
+            self._session_started_at = datetime.now()
+
+        if self._canvas.get_elapsed_ms() > 0:
+            self._update_timer_label()
+
+    def _clear_session_state(self) -> None:
+        path = self._session_state_path()
+        if path.exists():
+            try:
+                path.unlink()
+            except OSError:
+                pass
+
     def closeEvent(self, event) -> None:  # type: ignore[override]
         if getattr(self, "_tray_icon", None) is not None and not self._force_quit_requested:
             self.hide()
@@ -582,6 +634,7 @@ class MainWindow(QMainWindow):
             self._force_quit_requested = False
             event.ignore()
             return
+        self._save_session_state()
         self._save_settings()
         super().closeEvent(event)
 
@@ -873,21 +926,9 @@ class MainWindow(QMainWindow):
             return
         if checked == self._canvas.is_colorful_scheme():
             return
-        if self._canvas.get_elapsed_ms() > 0:
-            ok = self._confirm_reset_for_switch(
-                "Color Scheme Switch Confirmation",
-                "We need to reset tracking when switching color schemes.\nDo you want to start from scratch?",
-            )
-            if not ok:
-                self._defer_restore_option_from_runtime(
-                    self._colorful_action,
-                    self._colorful_box,
-                    self._canvas.is_colorful_scheme(),
-                )
-                return
         self._canvas.set_colorful_scheme(checked)
-        self._perform_reset()
         self._refresh_dpi_dependent_icons()
+        self._sync_ui_state()
 
     def _confirm_reset_for_switch(self, title: str, message: str) -> bool:
         elapsed = self._canvas.get_elapsed_ms()
@@ -917,23 +958,8 @@ class MainWindow(QMainWindow):
         return answer == QMessageBox.StandardButton.Yes
 
     def _confirm_exit(self) -> bool:
-        elapsed = self._canvas.get_elapsed_ms()
-        if elapsed < 60 * 1000:
-            return True
-
-        title = "Wait! Wait! Wait!"
-        message = "Do you really want to quit and lose all your data?"
-        if elapsed > 30 * 60 * 1000:
-            message += f"\nAre you sure? After {self._build_tracking_time_text(elapsed)} of laborious tracking?"
-
-        answer = QMessageBox.question(
-            self,
-            title,
-            message,
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        return answer == QMessageBox.StandardButton.Yes
+        # Session is persisted on close, no destructive-exit warning is needed.
+        return True
 
     def _set_option_checked(self, action: QAction, checkbox: QCheckBox, value: bool) -> None:
         self._suppress_option_handlers = True

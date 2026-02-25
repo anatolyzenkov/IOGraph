@@ -1,22 +1,31 @@
 # Project instructions
 
 ## Goal
-Port IOGraph from Java to Python + PyQt with behavior parity.
-
-## Source of truth
-Java source: /Users/anatolyzenkov/Development/iograph/IOGraph-master
+Maintain and evolve IOGraph Python + PyQt implementation.
+Behavior parity with Java is still important, but Java is now legacy reference.
 
 ## Rules
-- Do not add features not present in Java unless user explicitly asks.
-- Keep names/logic close to Java classes where practical.
-- For every behavior change, cite corresponding Java file/class.
+- New features and fixes are implemented in Python codebase unless explicitly requested otherwise.
 - Work in small steps; run `python3 -m compileall iograph` after edits.
 
 ## Reporting
 After each step:
-1. what was ported
-2. Java classes/files referenced
-3. what remains next
+1. what was made
+2. what remains next
+
+## New Feature Baseline (raw-data-first session model)
+- Tracking raw data is the primary source of truth for the current session.
+- Switching drawing style must not force reset/confirmation:
+  - colorful <-> monochrome
+  - with stop circles <-> without stop circles
+  - app must re-render full canvas and preview from raw data in the new style.
+- On app start, recording starts automatically.
+- On app close, raw data is persisted to disk.
+- On next app start, raw data is restored and re-rendered.
+- Restored session must also restore timing labels:
+  - total time
+  - time period
+- Raw data is deleted only by explicit `Reset`.
 
 ## Build And Release (macOS first)
 ### Goal

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from math import atan2, pi, sqrt
 from time import monotonic
 import sys
+from typing import Any
 
 from PyQt6.QtCore import QPointF, QRect, QRectF, QTimer, Qt
 from PyQt6.QtGui import QColor, QColorSpace, QCursor, QGuiApplication, QPainter, QPaintEvent, QPen, QPixmap
@@ -38,7 +39,6 @@ class TrackCanvas(QWidget):
         self._pixel_scale: float = 1.0
 
         # Java-like two-layer drawing model: full-size + preview-size
-        self._full_pixmap: QPixmap | None = None
         self._preview_pixmap: QPixmap | None = None
 
         self._prev_p = FloatPoint(0.0, 0.0)
@@ -46,8 +46,9 @@ class TrackCanvas(QWidget):
         self._stop_p = FloatPoint(0.0, 0.0)
         self._radius: float = 0.0
 
-        self._csv_lines: list[str] = ["x,y,time"]
-        self._start_time: float | None = None
+        self._raw_samples: list[tuple[float | None, float | None, int]] = []
+        self._accumulated_ms: int = 0
+        self._run_started_mono: float | None = None
         self._has_written_first_row = False
 
         self._ignore_mouse_stops: bool = False
@@ -65,14 +66,19 @@ class TrackCanvas(QWidget):
     # Public API
 
     def start_tracking(self) -> None:
+        if self._tracking:
+            return
         self._tracking = True
         self._prepare_for_update()
-        if self._start_time is None:
-            self._start_time = monotonic()
+        self._run_started_mono = monotonic()
         self._timer.start()
 
     def stop_tracking(self) -> None:
-        self._last_elapsed_ms = self.get_elapsed_ms()
+        if self._tracking and self._run_started_mono is not None:
+            delta = int((monotonic() - self._run_started_mono) * 1000)
+            self._accumulated_ms += max(0, delta)
+        self._run_started_mono = None
+        self._last_elapsed_ms = self._accumulated_ms
         self._tracking = False
         self._timer.stop()
         self.update()
@@ -85,27 +91,61 @@ class TrackCanvas(QWidget):
 
     def reset(self) -> None:
         self._ensure_buffers()
-        if self._full_pixmap is not None:
-            self._full_pixmap.fill(Qt.GlobalColor.transparent)
         if self._preview_pixmap is not None:
             self._preview_pixmap.fill(Qt.GlobalColor.transparent)
-        self._csv_lines = ["x,y,time"]
-        self._start_time = None
+        self._raw_samples = []
+        self._accumulated_ms = 0
+        self._run_started_mono = None
         self._has_written_first_row = False
         self._last_elapsed_ms = 0
         self._radius = 0.0
         self.update()
 
     def export_csv_text(self) -> str:
-        return "\n".join(self._csv_lines) + "\n"
+        lines = ["x,y,time"]
+        for x, y, t in self._raw_samples:
+            if x is None or y is None:
+                lines.append(f",,{t}")
+            else:
+                lines.append(f"{int(round(x))},{int(round(y))},{t}")
+        return "\n".join(lines) + "\n"
+
+    def export_raw_samples(self) -> list[dict[str, Any]]:
+        return [{"x": x, "y": y, "t": t} for x, y, t in self._raw_samples]
+
+    def load_raw_samples(self, rows: list[dict[str, Any]]) -> None:
+        parsed: list[tuple[float | None, float | None, int]] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            t_raw = row.get("t", 0)
+            try:
+                t = int(t_raw)
+            except (TypeError, ValueError):
+                t = 0
+            x_raw = row.get("x")
+            y_raw = row.get("y")
+            if x_raw is None or y_raw is None:
+                parsed.append((None, None, max(0, t)))
+                continue
+            try:
+                x = float(x_raw)
+                y = float(y_raw)
+            except (TypeError, ValueError):
+                parsed.append((None, None, max(0, t)))
+                continue
+            parsed.append((x, y, max(0, t)))
+        parsed.sort(key=lambda s: s[2])
+        self._raw_samples = parsed
+        self._has_written_first_row = len(parsed) > 0
+        self._accumulated_ms = parsed[-1][2] if parsed else 0
+        self._last_elapsed_ms = self._accumulated_ms
+        self._rebuild_from_raw_samples()
 
     def export_png(self, path: str) -> bool:
         self._ensure_buffers()
-        if self._full_pixmap is None:
-            return False
-
-        w = max(1, self._full_pixmap.width())
-        h = max(1, self._full_pixmap.height())
+        w = max(1, int(round(self._desktop_rect.width() * self._pixel_scale)))
+        h = max(1, int(round(self._desktop_rect.height() * self._pixel_scale)))
         out = QPixmap(w, h)
         bg = Qt.GlobalColor.black if self._colorful_scheme else Qt.GlobalColor.white
         out.fill(bg)
@@ -117,9 +157,13 @@ class TrackCanvas(QWidget):
                 source = QRectF(0.0, 0.0, float(src.width()), float(src.height()))
                 target = QRectF(0.0, 0.0, float(w), float(h))
                 p.drawPixmap(target, src, source)
-            p.drawPixmap(0, 0, self._full_pixmap)
         finally:
             p.end()
+        self._render_raw_on_pixmap(
+            out,
+            map_point=self._map_global_to_full,
+            stroke_scale=1.0 * self._pixel_scale,
+        )
 
         # macOS export: tag PNG with Display P3 profile when available.
         if sys.platform == "darwin":
@@ -133,11 +177,16 @@ class TrackCanvas(QWidget):
         return out.save(path, "PNG")
 
     def set_ignore_mouse_stops(self, value: bool) -> None:
+        if self._ignore_mouse_stops == value:
+            return
         self._ignore_mouse_stops = value
+        self._rebuild_from_raw_samples()
 
     def set_colorful_scheme(self, value: bool) -> None:
+        if self._colorful_scheme == value:
+            return
         self._colorful_scheme = value
-        self.update()
+        self._rebuild_from_raw_samples()
 
     def is_colorful_scheme(self) -> bool:
         return self._colorful_scheme
@@ -155,7 +204,7 @@ class TrackCanvas(QWidget):
         self._ensure_buffers()
         if self._use_desktop_background:
             self.update_desktop_background()
-        self.update()
+        self._rebuild_from_raw_samples()
 
     def is_use_multiple_monitors(self) -> bool:
         return self._use_multiple_monitors
@@ -206,11 +255,10 @@ class TrackCanvas(QWidget):
         return self._tracking
 
     def get_elapsed_ms(self) -> int:
-        if self._start_time is None:
-            return self._last_elapsed_ms
-        if not self._tracking:
-            return self._last_elapsed_ms
-        return int((monotonic() - self._start_time) * 1000)
+        if self._tracking and self._run_started_mono is not None:
+            delta = int((monotonic() - self._run_started_mono) * 1000)
+            return self._accumulated_ms + max(0, delta)
+        return self._last_elapsed_ms
 
     # Internal helpers
 
@@ -219,27 +267,8 @@ class TrackCanvas(QWidget):
         self._update_projection()
         pixel_scale = self._get_pixel_scale()
 
-        full_w = max(1, int(round(self._desktop_rect.width() * pixel_scale)))
-        full_h = max(1, int(round(self._desktop_rect.height() * pixel_scale)))
         prev_w = max(1, int(round(self.width() * pixel_scale)))
         prev_h = max(1, int(round(self.height() * pixel_scale)))
-
-        full_need = (
-            self._full_pixmap is None
-            or self._full_pixmap.width() != full_w
-            or self._full_pixmap.height() != full_h
-            or abs(self._pixel_scale - pixel_scale) > 0.01
-        )
-        if full_need:
-            old = self._full_pixmap
-            self._full_pixmap = QPixmap(full_w, full_h)
-            self._full_pixmap.fill(Qt.GlobalColor.transparent)
-            if old is not None:
-                p = QPainter(self._full_pixmap)
-                try:
-                    p.drawPixmap(0, 0, old)
-                finally:
-                    p.end()
 
         prev_need = (
             self._preview_pixmap is None
@@ -264,6 +293,7 @@ class TrackCanvas(QWidget):
     def resizeEvent(self, event) -> None:  # type: ignore[override]
         super().resizeEvent(event)
         self._ensure_buffers()
+        self._rebuild_from_raw_samples()
 
     def _prepare_for_update(self) -> None:
         self._ensure_buffers()
@@ -279,11 +309,8 @@ class TrackCanvas(QWidget):
             return
 
         self._ensure_buffers()
-        if self._preview_pixmap is None or self._full_pixmap is None:
+        if self._preview_pixmap is None:
             return
-
-        if self._start_time is None:
-            self._start_time = monotonic()
 
         pos = QCursor.pos()
         self._new_p.x = float(pos.x())
@@ -294,12 +321,12 @@ class TrackCanvas(QWidget):
 
         no_movement = self._prev_p.x == self._new_p.x and self._prev_p.y == self._new_p.y
         if not self._has_written_first_row:
-            self._csv_lines.append(f"{int(pos.x())},{int(pos.y())},{dt_ms}")
+            self._raw_samples.append((float(pos.x()), float(pos.y()), dt_ms))
             self._has_written_first_row = True
         elif no_movement:
-            self._csv_lines.append(f",,{dt_ms}")
+            self._raw_samples.append((None, None, dt_ms))
         else:
-            self._csv_lines.append(f"{int(pos.x())},{int(pos.y())},{dt_ms}")
+            self._raw_samples.append((float(pos.x()), float(pos.y()), dt_ms))
 
         update_rect = QRect()
 
@@ -315,9 +342,6 @@ class TrackCanvas(QWidget):
 
             c = self._get_draw_color()
             self._draw_line(self._preview_pixmap, prev_preview, new_preview, c, self.STROKE_WEIGHT * self._scale)
-            prev_full = self._map_global_to_full(self._prev_p)
-            new_full = self._map_global_to_full(self._new_p)
-            self._draw_line(self._full_pixmap, prev_full, new_full, c, self.STROKE_WEIGHT * self._pixel_scale)
 
         if self._ignore_mouse_stops:
             self._prev_p.set_from(self._new_p)
@@ -343,12 +367,6 @@ class TrackCanvas(QWidget):
                     c,
                     self._scale,
                 )
-                self._draw_stop_ellipse(
-                    self._full_pixmap,
-                    self._map_global_to_full(self._prev_p),
-                    c,
-                    1.0 * self._pixel_scale,
-                )
                 update_rect = update_rect.united(preview_rect)
 
             self._stop_p.set_from(self._new_p)
@@ -370,10 +388,18 @@ class TrackCanvas(QWidget):
         finally:
             p.end()
 
-    def _draw_stop_ellipse(self, pix: QPixmap, center: QPointF, color: QColor, scale: float) -> QRect:
-        halo_d = int(2.0 * self._radius * scale)
-        dot_d = int(2.0 * sqrt(self._radius) * scale)
-        n = 200.0 * max(0.0, 1.0 - 2.0 * sqrt(self._radius) / self.RADIUS_THRESHOLD)
+    def _draw_stop_ellipse(
+        self,
+        pix: QPixmap,
+        center: QPointF,
+        color: QColor,
+        scale: float,
+        radius: float | None = None,
+    ) -> QRect:
+        r = self._radius if radius is None else radius
+        halo_d = int(2.0 * r * scale)
+        dot_d = int(2.0 * sqrt(r) * scale)
+        n = 200.0 * max(0.0, 1.0 - 2.0 * sqrt(r) / self.RADIUS_THRESHOLD)
         ch = 0 if self._colorful_scheme else 255
         halo_color = QColor(ch, ch, ch, int(n))
 
@@ -401,13 +427,82 @@ class TrackCanvas(QWidget):
 
         return QRect(hx - 2, hy - 2, halo_d + 4, halo_d + 4)
 
+    def _clear_draw_buffers(self) -> None:
+        self._ensure_buffers()
+        if self._preview_pixmap is not None:
+            self._preview_pixmap.fill(Qt.GlobalColor.transparent)
+
+    def _rebuild_from_raw_samples(self) -> None:
+        self._clear_draw_buffers()
+        if self._preview_pixmap is None:
+            return
+        self._render_raw_on_pixmap(
+            self._preview_pixmap,
+            map_point=self._map_global_to_preview,
+            stroke_scale=self._scale,
+        )
+        self.update()
+
+    def _render_raw_on_pixmap(self, pix: QPixmap, map_point, stroke_scale: float) -> None:
+        if not self._raw_samples:
+            self._radius = 0.0
+            self._has_written_first_row = False
+            return
+
+        first_x, first_y, _ = self._raw_samples[0]
+        if first_x is None or first_y is None:
+            return
+
+        radius = 0.0
+        prev = FloatPoint(first_x, first_y)
+        stop = FloatPoint(first_x, first_y)
+
+        for x, y, _ in self._raw_samples[1:]:
+            if x is None or y is None:
+                new_p = FloatPoint(prev.x, prev.y)
+            else:
+                new_p = FloatPoint(x, y)
+
+            no_movement = prev.x == new_p.x and prev.y == new_p.y
+            if not no_movement:
+                c = self._get_draw_color_for(prev, new_p)
+                p0 = map_point(prev)
+                p1 = map_point(new_p)
+                self._draw_line(pix, p0, p1, c, self.STROKE_WEIGHT * stroke_scale)
+
+            if self._ignore_mouse_stops:
+                prev = new_p
+                continue
+
+            dx = new_p.x - stop.x
+            dy = new_p.y - stop.y
+            d = dx * dx + dy * dy
+            if d < self.DELAY_DISTANCE_QUAD:
+                radius += 0.3
+            else:
+                if radius > self.RADIUS_THRESHOLD:
+                    max_radius = (self._desktop_rect.height() * 0.25) ** 2
+                    radius = min(radius, max_radius)
+                    c = self._get_draw_color_for(prev, new_p)
+                    self._draw_stop_ellipse(
+                        pix,
+                        map_point(prev),
+                        c,
+                        stroke_scale,
+                        radius=radius,
+                    )
+                stop = FloatPoint(new_p.x, new_p.y)
+                radius = 0.0
+
+            prev = new_p
+
     # Painting
 
-    def _get_draw_color(self) -> QColor:
+    def _get_draw_color_for(self, prev: FloatPoint, new: FloatPoint) -> QColor:
         if not self._colorful_scheme:
             return QColor("black")
 
-        n = 1.0 + atan2(self._new_p.y - self._prev_p.y, self._new_p.x - self._prev_p.x) / pi
+        n = 1.0 + atan2(new.y - prev.y, new.x - prev.x) / pi
         n = (n + 0.25) % 1.0
         colors = (QColor(255, 255, 0), QColor(0, 255, 255), QColor(255, 0, 255))
         idx = int(len(colors) * n)
@@ -419,6 +514,9 @@ class TrackCanvas(QWidget):
         g = int(c0.green() + (c1.green() - c0.green()) * t)
         b = int(c0.blue() + (c1.blue() - c0.blue()) * t)
         return QColor(r, g, b)
+
+    def _get_draw_color(self) -> QColor:
+        return self._get_draw_color_for(self._prev_p, self._new_p)
 
     def paintEvent(self, event: QPaintEvent) -> None:  # type: ignore[override]
         self._ensure_buffers()
