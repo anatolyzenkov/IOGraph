@@ -43,6 +43,7 @@ class MainWindow(QMainWindow):
         self._session_ended_at: datetime | None = None
         self._suppress_option_handlers = False
         self._force_quit_requested = False
+        self._last_system_dark_mode = False
         self._pending_snapshot_restore_visible = False
         self._pending_snapshot_restore_minimized = False
         self._setup_auto_hide_timer = QTimer(self)
@@ -55,9 +56,13 @@ class MainWindow(QMainWindow):
         self._panel_anim_count = 0
         self._panel_anim_direction = 0
         self._panel_anim_max = 30
-        self.setWindowTitle("IOGraph (Python)")
+        self.setWindowTitle("IOGraph")
         self.setFixedWidth(self.MAIN_FRAME_WIDTH)
         self.setWindowIcon(self._app_icon())
+        self._last_system_dark_mode = self._is_system_dark_mode()
+        style_hints = QGuiApplication.styleHints()
+        if hasattr(style_hints, "colorSchemeChanged"):
+            style_hints.colorSchemeChanged.connect(lambda _scheme: self._on_system_color_scheme_changed())
 
         central = QWidget(self)
         layout = QVBoxLayout(central)
@@ -135,16 +140,16 @@ class MainWindow(QMainWindow):
 
         self._period_label = QLabel("Time Period", self._front_panel)
         self._period_label.setFont(QFont(self._period_label.font().family(), 12))
-        self._period_label.setFixedHeight(18)
+        self._period_label.setFixedHeight(16)
         self._period_label.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
         self._period_label.setVisible(False)
         front_layout.addWidget(self._period_label, stretch=0)
         front_layout.setAlignment(self._period_label, Qt.AlignmentFlag.AlignTop)
 
         control_layout = QGridLayout(self._control_panel)
-        control_layout.setContentsMargins(10, 0, 0, 0)
-        control_layout.setHorizontalSpacing(16)
-        control_layout.setVerticalSpacing(2)
+        control_layout.setContentsMargins(8, 0, 0, 0)
+        control_layout.setHorizontalSpacing(24)
+        control_layout.setVerticalSpacing(0)
 
         self._ignore_stops_box = QCheckBox("Ignore Mouse Stops", self._control_panel)
         control_layout.setAlignment(self._ignore_stops_box, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
@@ -157,13 +162,16 @@ class MainWindow(QMainWindow):
         desktop_row_layout.addWidget(self._use_desktop_box, 0)
         self._update_desktop_btn = QPushButton(desktop_row)
         self._update_desktop_btn.clicked.connect(self._refresh_desktop_snapshot)
-        self._update_desktop_btn.setFixedSize(19, 19)
+        self._update_desktop_btn.setFixedSize(18, 18)
         self._update_desktop_btn.setIconSize(QSize(18, 18))
         self._update_desktop_btn.setFlat(True)
-        self._update_desktop_btn.setStyleSheet("QPushButton { border: none; background: transparent; }")
+        self._update_desktop_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding-top: 2px; }")
         self._update_desktop_btn.setIcon(self._icon("UpdateDesktopDisabledBtn.png"))
         self._update_desktop_btn.pressed.connect(self._on_update_desktop_pressed)
         self._update_desktop_btn.released.connect(self._on_update_desktop_released)
+        size_policy = self._update_desktop_btn.sizePolicy()
+        size_policy.setRetainSizeWhenHidden(True)
+        self._update_desktop_btn.setSizePolicy(size_policy)
         self._update_desktop_btn.setVisible(False)
         desktop_row_layout.addWidget(self._update_desktop_btn, 0)
         desktop_row_layout.addStretch(1)
@@ -176,7 +184,7 @@ class MainWindow(QMainWindow):
         colorful_row_layout = QHBoxLayout(colorful_row)
         colorful_row_layout.setContentsMargins(0, 0, 0, 0)
         colorful_row_layout.setSpacing(0)
-        self._colorful_box = QCheckBox("Use Colourful Scheme", colorful_row)
+        self._colorful_box = QCheckBox("Use Colorful Scheme", colorful_row)
         colorful_row_layout.addWidget(self._colorful_box, 0)
         colorful_row_layout.addStretch(1)
         control_layout.setAlignment(colorful_row, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
@@ -214,8 +222,8 @@ class MainWindow(QMainWindow):
         self._url_btn.setFlat(True)
         self._url_btn.setStyleSheet("QPushButton { border: none; background: transparent; }")
         self._url_btn.setIcon(self._icon("URLBtn.png"))
-        self._url_btn.pressed.connect(lambda: self._url_btn.setIcon(self._icon("URLPressedBtn.png")))
-        self._url_btn.released.connect(lambda: self._url_btn.setIcon(self._icon("URLBtn.png")))
+        self._url_btn.pressed.connect(self._on_url_pressed)
+        self._url_btn.released.connect(self._on_url_released)
         self._url_btn.clicked.connect(lambda: webbrowser.open("https://iographica.com/"))
         secondary_layout.addWidget(self._url_btn)
         bottom_layout.addWidget(self._secondary_panel, stretch=0)
@@ -253,7 +261,7 @@ class MainWindow(QMainWindow):
         self._save_image_action.triggered.connect(self._save_image)
         file_menu.addAction(self._save_image_action)
 
-        self._save_csv_action = QAction("Save &CSV...", self)
+        self._save_csv_action = QAction("Save &Raw Data...", self)
         self._save_csv_action.setShortcut("Ctrl+Shift+S")
         self._save_csv_action.triggered.connect(self._save_csv)
         file_menu.addAction(self._save_csv_action)
@@ -283,7 +291,7 @@ class MainWindow(QMainWindow):
         self._ignore_stops_action.toggled.connect(self._canvas.set_ignore_mouse_stops)
         options_menu.addAction(self._ignore_stops_action)
 
-        self._colorful_action = QAction("Colourful Scheme", self)
+        self._colorful_action = QAction("Colorful Scheme", self)
         self._colorful_action.setCheckable(True)
         self._colorful_action.toggled.connect(self._on_colorful_toggled)
         options_menu.addAction(self._colorful_action)
@@ -324,7 +332,7 @@ class MainWindow(QMainWindow):
         help_menu.addAction(self._auto_update_action)
 
         help_menu.addSeparator()
-        facebook_action = QAction("Join Our Facebook Community...", self)
+        facebook_action = QAction("Join our Facebook Community...", self)
         facebook_action.triggered.connect(lambda: self._open_url(self._FACEBOOK_URL))
         help_menu.addAction(facebook_action)
         website_action = QAction("Visit IOGraphica's Website...", self)
@@ -336,7 +344,7 @@ class MainWindow(QMainWindow):
             self._tray_icon = None
             return
         self._tray_icon = QSystemTrayIcon(self)
-        self._tray_icon.setIcon(self._icon("MenuBarIconRecord.png"))
+        self._tray_icon.setIcon(self._tray_state_icon(tracking=False))
         tray_menu = QMenu(self)
         self._tray_toggle_action = tray_menu.addAction("Start")
         self._tray_toggle_action.triggered.connect(lambda: self._set_tracking(not self._canvas.is_tracking()))
@@ -428,7 +436,7 @@ class MainWindow(QMainWindow):
     def _save_csv(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
             self,
-            "Save CSV",
+            "Save Raw Data",
             f"{self._build_export_base_name()}.csv",
             "CSV file (*.csv)",
         )
@@ -496,7 +504,11 @@ class MainWindow(QMainWindow):
                 "We need to reset tracking when switching between single/multiple monitors.\nDo you want to start from scratch?",
             )
             if not ok:
-                self._set_option_checked(self._multi_monitor_action, self._multi_monitor_box, not checked)
+                self._defer_restore_option_from_runtime(
+                    self._multi_monitor_action,
+                    self._multi_monitor_box,
+                    self._canvas.is_use_multiple_monitors(),
+                )
                 return
         self._canvas.set_use_multiple_monitors(checked)
         if self._use_desktop_action.isChecked():
@@ -555,6 +567,7 @@ class MainWindow(QMainWindow):
         super().closeEvent(event)
 
     def _update_timer_label(self) -> None:
+        self._refresh_icons_if_system_theme_changed()
         elapsed_ms = self._canvas.get_elapsed_ms()
         if elapsed_ms <= 0 and not self._canvas.is_tracking():
             return
@@ -746,8 +759,58 @@ class MainWindow(QMainWindow):
             return
         self._update_desktop_btn.setIcon(self._icon("UpdateDesktopBtn.png"))
 
+    def _on_url_pressed(self) -> None:
+        self._url_btn.setIcon(self._icon("URLPressedBtn.png"))
+
+    def _on_url_released(self) -> None:
+        self._update_url_icon()
+
+    def _update_url_icon(self) -> None:
+        if self._url_btn.isDown():
+            self._url_btn.setIcon(self._icon("URLPressedBtn.png"))
+            return
+        self._url_btn.setIcon(self._icon("URLBtn.png"))
+
     def _icon(self, name: str) -> QIcon:
-        return QIcon(str(self._resource_file_for_dpi(name)))
+        themed_name = self._themed_icon_name(name)
+        return QIcon(str(self._resource_file_for_dpi(themed_name)))
+
+    def _themed_icon_name(self, name: str) -> str:
+        if not self._is_system_dark_mode():
+            return name
+        base = self._RESOURCE_DIR / name
+        themed = base.with_name(f"{base.stem}_dark{base.suffix}")
+        return themed.name if themed.exists() else name
+
+    def _is_system_dark_mode(self) -> bool:
+        style_hints = QGuiApplication.styleHints()
+        if not hasattr(style_hints, "colorScheme"):
+            return False
+        return style_hints.colorScheme() == Qt.ColorScheme.Dark
+
+    def _on_system_color_scheme_changed(self) -> None:
+        self._last_system_dark_mode = self._is_system_dark_mode()
+        self._refresh_dpi_dependent_icons()
+
+    def _refresh_icons_if_system_theme_changed(self) -> None:
+        dark_mode = self._is_system_dark_mode()
+        if dark_mode == self._last_system_dark_mode:
+            return
+        self._last_system_dark_mode = dark_mode
+        self._refresh_dpi_dependent_icons()
+
+    def _tray_icon_name(self, tracking: bool) -> str:
+        if sys.platform == "darwin":
+            name = "MacOSTrayIconPause.png" if tracking else "MacOSTrayIconRecord.png"
+            if (self._RESOURCE_DIR / name).exists():
+                return name
+        return "MenuBarIconPause.png" if tracking else "MenuBarIconRecord.png"
+
+    def _tray_state_icon(self, tracking: bool) -> QIcon:
+        icon = QIcon(str(self._resource_file_for_dpi(self._tray_icon_name(tracking))))
+        if sys.platform == "darwin":
+            icon.setIsMask(True)
+        return icon
 
     def _app_icon(self) -> QIcon:
         icon = QIcon()
@@ -778,6 +841,7 @@ class MainWindow(QMainWindow):
         self._update_save_icon()
         self._on_setup_released()
         self._on_update_desktop_released()
+        self._update_url_icon()
         if self._reset_btn.isDown():
             self._reset_btn.setIcon(self._icon("ResetPressedBtn.png"))
         else:
@@ -796,10 +860,15 @@ class MainWindow(QMainWindow):
                 "We need to reset tracking when switching color schemes.\nDo you want to start from scratch?",
             )
             if not ok:
-                self._set_option_checked(self._colorful_action, self._colorful_box, not checked)
+                self._defer_restore_option_from_runtime(
+                    self._colorful_action,
+                    self._colorful_box,
+                    self._canvas.is_colorful_scheme(),
+                )
                 return
         self._canvas.set_colorful_scheme(checked)
         self._perform_reset()
+        self._refresh_dpi_dependent_icons()
 
     def _confirm_reset_for_switch(self, title: str, message: str) -> bool:
         elapsed = self._canvas.get_elapsed_ms()
@@ -816,7 +885,7 @@ class MainWindow(QMainWindow):
 
     def _confirm_reset(self) -> bool:
         elapsed = self._canvas.get_elapsed_ms()
-        message = "Do you really wanna start from scratch?"
+        message = "Do you really want to start from scratch?"
         if elapsed > 30 * 60 * 1000:
             message += f"\nAre you sure? After {self._build_tracking_time_text(elapsed)} of tracking?"
         answer = QMessageBox.question(
@@ -834,7 +903,7 @@ class MainWindow(QMainWindow):
             return True
 
         title = "Wait! Wait! Wait!"
-        message = "Do you really wanna exit and lose all your data?"
+        message = "Do you really want to quit and lose all your data?"
         if elapsed > 30 * 60 * 1000:
             message += f"\nAre you sure? After {self._build_tracking_time_text(elapsed)} of laborious tracking?"
 
@@ -854,6 +923,13 @@ class MainWindow(QMainWindow):
             checkbox.setChecked(value)
         finally:
             self._suppress_option_handlers = False
+
+    def _restore_option_from_runtime(self, action: QAction, checkbox: QCheckBox, value: bool) -> None:
+        self._set_checked_silent(action, value)
+        self._set_checked_silent(checkbox, value)
+
+    def _defer_restore_option_from_runtime(self, action: QAction, checkbox: QCheckBox, value: bool) -> None:
+        QTimer.singleShot(0, lambda: self._restore_option_from_runtime(action, checkbox, value))
 
     @staticmethod
     def _set_checked_silent(widget, value: bool) -> None:
@@ -930,28 +1006,39 @@ class MainWindow(QMainWindow):
 
     def event(self, event) -> bool:  # type: ignore[override]
         event_type = event.type()
+        theme_change = getattr(QEvent.Type, "ThemeChange", None)
         if event_type == QEvent.Type.WindowDeactivate and self._setup_btn.isChecked():
             self._setup_auto_hide_timer.start()
         elif event_type == QEvent.Type.WindowActivate:
             self._setup_auto_hide_timer.stop()
+        elif event_type in tuple(
+            t
+            for t in (QEvent.Type.ApplicationPaletteChange, QEvent.Type.PaletteChange, theme_change)
+            if t is not None
+        ):
+            self._refresh_icons_if_system_theme_changed()
         return super().event(event)
 
     def _toggle_settings_from_tray(self) -> None:
         self._setup_btn.setChecked(not self._setup_btn.isChecked())
-        self.showNormal()
-        self.raise_()
-        self.activateWindow()
+        self._show_on_top()
         self._update_tray_state()
 
     def _on_tray_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
         if reason == QSystemTrayIcon.ActivationReason.Trigger:
+            self._show_on_top()
+
+    def _show_on_top(self) -> None:
+        if not self.isVisible():
+            self.show()
+        if self.isMinimized():
             self.showNormal()
-            self.raise_()
-            self.activateWindow()
+        self.raise_()
+        self.activateWindow()
 
     def _update_tray_state(self) -> None:
         tray = getattr(self, "_tray_icon", None)
-        if tray is None:
+        if tray is None or not hasattr(self, "_tray_toggle_action"):
             return
         elapsed = self._canvas.get_elapsed_ms()
         tracking = self._canvas.is_tracking()
@@ -964,7 +1051,7 @@ class MainWindow(QMainWindow):
         self._tray_save_csv_action.setEnabled(can_save)
         self._tray_reset_action.setEnabled(elapsed > 2000)
         self._tray_settings_action.setText("Hide Settings" if self._setup_btn.isChecked() else "Show Settings")
-        tray.setIcon(self._icon("MenuBarIconPause.png" if tracking else "MenuBarIconRecord.png"))
+        tray.setIcon(self._tray_state_icon(tracking))
 
     def _sync_ui_state(self) -> None:
         elapsed = self._canvas.get_elapsed_ms()
