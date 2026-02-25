@@ -3,9 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from math import atan2, pi, sqrt
 from time import monotonic
+import sys
 
 from PyQt6.QtCore import QPointF, QRect, QRectF, QTimer, Qt
-from PyQt6.QtGui import QColor, QCursor, QGuiApplication, QPainter, QPaintEvent, QPen, QPixmap
+from PyQt6.QtGui import QColor, QColorSpace, QCursor, QGuiApplication, QPainter, QPaintEvent, QPen, QPixmap
 from PyQt6.QtWidgets import QWidget
 
 
@@ -119,6 +120,16 @@ class TrackCanvas(QWidget):
             p.drawPixmap(0, 0, self._full_pixmap)
         finally:
             p.end()
+
+        # macOS export: tag PNG with Display P3 profile when available.
+        if sys.platform == "darwin":
+            image = out.toImage()
+            try:
+                image.setColorSpace(QColorSpace(QColorSpace.NamedColorSpace.DisplayP3))
+            except Exception:
+                # Keep export robust even if color space API varies by Qt build.
+                pass
+            return image.save(path, "PNG")
         return out.save(path, "PNG")
 
     def set_ignore_mouse_stops(self, value: bool) -> None:

@@ -418,10 +418,11 @@ class MainWindow(QMainWindow):
         self._status("Canvas reset")
 
     def _save_image(self) -> None:
+        default_dir = self._default_save_dir()
         path, _ = QFileDialog.getSaveFileName(
             self,
             "Save image",
-            f"{self._build_export_base_name()}.png",
+            str(default_dir / f"{self._build_export_base_name()}.png"),
             "PNG image (*.png)",
         )
         if not path:
@@ -429,15 +430,17 @@ class MainWindow(QMainWindow):
         image_path = Path(path)
         if image_path.suffix.lower() != ".png":
             image_path = image_path.with_suffix(".png")
+        self._remember_save_dir(image_path.parent)
         ok = self._canvas.export_png(str(image_path))
         self._status("Image saved" if ok else "Failed to save image")
         self._sync_ui_state()
 
     def _save_csv(self) -> None:
+        default_dir = self._default_save_dir()
         path, _ = QFileDialog.getSaveFileName(
             self,
             "Save Raw Data",
-            f"{self._build_export_base_name()}.csv",
+            str(default_dir / f"{self._build_export_base_name()}.csv"),
             "CSV file (*.csv)",
         )
         if not path:
@@ -445,9 +448,25 @@ class MainWindow(QMainWindow):
         csv_path = Path(path)
         if csv_path.suffix.lower() != ".csv":
             csv_path = csv_path.with_suffix(".csv")
+        self._remember_save_dir(csv_path.parent)
         csv_path.write_text(self._canvas.export_csv_text(), encoding="utf-8")
         self._status("CSV saved")
         self._sync_ui_state()
+
+    def _default_save_dir(self) -> Path:
+        saved = self._settings.value("options/last_save_dir", "", str)
+        if saved:
+            candidate = Path(saved).expanduser()
+            if candidate.exists() and candidate.is_dir():
+                return candidate
+        desktop = Path.home() / "Desktop"
+        if desktop.exists() and desktop.is_dir():
+            return desktop
+        return Path.home()
+
+    def _remember_save_dir(self, directory: Path) -> None:
+        if directory.exists() and directory.is_dir():
+            self._settings.setValue("options/last_save_dir", str(directory))
 
     def _on_use_desktop_toggled(self, checked: bool) -> None:
         if self._suppress_option_handlers:
