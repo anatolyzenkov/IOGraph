@@ -13,36 +13,6 @@ After each step:
 1. what was made
 2. what remains next
 
-## New Feature Baseline (raw-data-first session model)
-- Raw data is the source of truth for drawing and session restore.
-- Style/behavior switches must not reset session data:
-  - `Colorful` on/off
-  - `Ignore Mouse Stops` on/off
-  - `Use Multiple Monitors` on/off
-- These switches trigger re-render from raw data (preview + export) without confirmation dialogs.
-- App starts recording automatically on launch.
-- Session persistence:
-  - raw data is persisted on real app exit (not on tray hide),
-  - timing state is persisted and restored (`total time` + `time period`),
-  - raw data is cleared only by explicit `Reset`.
-- Storage model:
-  - raw data is stored in chunked NDJSON files (`raw_chunks/*.ndjson`) with metadata in `session_state.json`,
-  - startup loads chunked storage, with fallback compatibility for legacy inline `raw_samples`.
-- Render cache:
-  - preview cache and desktop background cache are saved on exit,
-  - caches are reused only when render signature matches current monitor/layout context,
-  - fallback path is always available (rebuild preview from raw, refresh desktop snapshot when needed).
-- Heavy render path:
-  - full PNG export is rendered from raw in background worker using `QImage`,
-  - preview rebuild is also performed in worker to reduce UI blocking.
-
-### Current Bug Being Fixed
-- Symptom:
-  - when `Ignore Mouse Stops = true` and switching style (for example B/W -> Colorful), only a central square updates first,
-  - then there is a pause,
-  - then final full re-render appears,
-  - expected progressive preview animation is not visible in some modes (notably with ).
-
 ## Build And Release (macOS first)
 ### Goal
 - Produce reproducible desktop builds for macOS (first) and Windows (later).
@@ -54,7 +24,7 @@ After each step:
 - macOS output target:
   - `IOGraph.app`
   - distributable archive (`.dmg` or `.zip`)
-- Keep all runtime assets in `iograph/resources` and include them in packaging config.
+- Keep all runtime assets in `iograph/resources` and include them in packaging config. 
 
 ### Versioning
 - Use semantic version tags: `vX.Y.Z`.
