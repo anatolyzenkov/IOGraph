@@ -28,7 +28,7 @@ from .tracker import TrackCanvas
 
 
 class MainWindow(QMainWindow):
-    MAIN_FRAME_WIDTH = 465
+    MAIN_FRAME_WIDTH = 720
     PANEL_HEIGHT = 66
     _MONTH_NAMES = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
     _RESOURCE_DIR = Path(__file__).resolve().parent / "resources"
@@ -554,8 +554,6 @@ class MainWindow(QMainWindow):
         self._update_desktop_btn.setVisible(use_desktop)
         self._update_desktop_btn.setEnabled(use_desktop)
         self._update_update_desktop_icon()
-        if use_desktop:
-            self._refresh_desktop_snapshot()
         self._set_auto_update_state(auto_update)
         self._sync_ui_state()
 
@@ -572,12 +570,24 @@ class MainWindow(QMainWindow):
             return Path.home() / ".iograph" / self._SESSION_STATE_FILE
         return Path(base) / self._SESSION_STATE_FILE
 
+    def _preview_cache_path(self) -> Path:
+        return self._session_state_path().with_name("preview_cache.png")
+
+    def _desktop_cache_path(self) -> Path:
+        return self._session_state_path().with_name("desktop_cache.png")
+
     def _save_session_state(self) -> None:
+        signature = self._canvas.render_cache_signature()
+        preview_saved = self._canvas.export_preview_cache(str(self._preview_cache_path()))
+        desktop_saved = self._canvas.export_desktop_background_cache(str(self._desktop_cache_path()))
         state = {
             "version": 1,
             "session_started_at": self._session_started_at.isoformat() if self._session_started_at else None,
             "session_ended_at": self._session_ended_at.isoformat() if self._session_ended_at else None,
             "raw_samples": self._canvas.export_raw_samples(),
+            "render_signature": signature,
+            "preview_cache_saved": preview_saved,
+            "desktop_cache_saved": desktop_saved,
         }
         path = self._session_state_path()
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -586,6 +596,8 @@ class MainWindow(QMainWindow):
     def _load_session_state(self) -> None:
         path = self._session_state_path()
         if not path.exists():
+            if self._use_desktop_action.isChecked():
+                self._refresh_desktop_snapshot()
             return
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
@@ -595,8 +607,20 @@ class MainWindow(QMainWindow):
             return
 
         raw_samples = payload.get("raw_samples", [])
+        signature = payload.get("render_signature")
+        use_cache = signature == self._canvas.render_cache_signature()
+        loaded_preview_cache = False
+        loaded_desktop_cache = False
         if isinstance(raw_samples, list):
-            self._canvas.load_raw_samples(raw_samples)
+            self._canvas.load_raw_samples(raw_samples, rebuild=not use_cache)
+        if use_cache and payload.get("preview_cache_saved", False):
+            loaded_preview_cache = self._canvas.load_preview_cache(str(self._preview_cache_path()))
+        if use_cache and self._use_desktop_action.isChecked() and payload.get("desktop_cache_saved", False):
+            loaded_desktop_cache = self._canvas.load_desktop_background_cache(str(self._desktop_cache_path()))
+        if not loaded_preview_cache:
+            self._canvas.rebuild_from_raw_samples()
+        if self._use_desktop_action.isChecked() and not loaded_desktop_cache:
+            self._refresh_desktop_snapshot()
 
         started_raw = payload.get("session_started_at")
         ended_raw = payload.get("session_ended_at")
@@ -622,6 +646,18 @@ class MainWindow(QMainWindow):
         if path.exists():
             try:
                 path.unlink()
+            except OSError:
+                pass
+        preview_cache = self._preview_cache_path()
+        if preview_cache.exists():
+            try:
+                preview_cache.unlink()
+            except OSError:
+                pass
+        desktop_cache = self._desktop_cache_path()
+        if desktop_cache.exists():
+            try:
+                desktop_cache.unlink()
             except OSError:
                 pass
 

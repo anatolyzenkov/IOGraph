@@ -26,6 +26,7 @@ class TrackCanvas(QWidget):
     STROKE_WEIGHT = 0.45
     RADIUS_THRESHOLD = 20.0
     DELAY_DISTANCE_QUAD = 400.0
+    IDLE_RADIUS_STEP = 0.3
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -113,7 +114,7 @@ class TrackCanvas(QWidget):
     def export_raw_samples(self) -> list[dict[str, Any]]:
         return [{"x": x, "y": y, "t": t} for x, y, t in self._raw_samples]
 
-    def load_raw_samples(self, rows: list[dict[str, Any]]) -> None:
+    def load_raw_samples(self, rows: list[dict[str, Any]], rebuild: bool = True) -> None:
         parsed: list[tuple[float | None, float | None, int]] = []
         for row in rows:
             if not isinstance(row, dict):
@@ -136,11 +137,97 @@ class TrackCanvas(QWidget):
                 continue
             parsed.append((x, y, max(0, t)))
         parsed.sort(key=lambda s: s[2])
-        self._raw_samples = parsed
+        self._raw_samples = self._compact_idle_samples(parsed)
         self._has_written_first_row = len(parsed) > 0
         self._accumulated_ms = parsed[-1][2] if parsed else 0
         self._last_elapsed_ms = self._accumulated_ms
+        if rebuild:
+            self._rebuild_from_raw_samples()
+
+    @staticmethod
+    def _compact_idle_samples(samples: list[tuple[float | None, float | None, int]]) -> list[tuple[float | None, float | None, int]]:
+        compact: list[tuple[float | None, float | None, int]] = []
+        for x, y, t in samples:
+            if compact and x is None and y is None and compact[-1][0] is None and compact[-1][1] is None:
+                compact[-1] = (None, None, max(compact[-1][2], t))
+                continue
+            compact.append((x, y, t))
+        return compact
+
+    def _idle_ticks_for_delta(self, dt_ms: int) -> float:
+        interval_ms = max(1, self._timer.interval())
+        return max(1.0, dt_ms / float(interval_ms))
+
+    def rebuild_from_raw_samples(self) -> None:
         self._rebuild_from_raw_samples()
+
+    def export_preview_cache(self, path: str) -> bool:
+        self._ensure_buffers()
+        if self._preview_pixmap is None:
+            return False
+        return self._preview_pixmap.save(path, "PNG")
+
+    def load_preview_cache(self, path: str) -> bool:
+        self._ensure_buffers()
+        if self._preview_pixmap is None:
+            return False
+        cache = QPixmap(path)
+        if cache.isNull():
+            return False
+        if cache.size() != self._preview_pixmap.size():
+            return False
+        self._preview_pixmap.fill(Qt.GlobalColor.transparent)
+        p = QPainter(self._preview_pixmap)
+        try:
+            p.drawPixmap(0, 0, cache)
+        finally:
+            p.end()
+        self.update()
+        return True
+
+    def export_desktop_background_cache(self, path: str) -> bool:
+        if self._desktop_background_source is None:
+            return False
+        return self._desktop_background_source.save(path, "PNG")
+
+    def load_desktop_background_cache(self, path: str) -> bool:
+        cache = QPixmap(path)
+        if cache.isNull():
+            return False
+        if cache.width() != self._desktop_rect.width() or cache.height() != self._desktop_rect.height():
+            return False
+        self._desktop_background_source = cache
+        self.update()
+        return True
+
+    def render_cache_signature(self) -> dict[str, Any]:
+        self._ensure_buffers()
+        self._refresh_desktop_geometry()
+        screens = QGuiApplication.screens()
+        primary = QGuiApplication.primaryScreen()
+        primary_name = primary.name() if primary is not None else ""
+        return {
+            "use_multiple_monitors": self._use_multiple_monitors,
+            "desktop_rect": (
+                self._desktop_rect.x(),
+                self._desktop_rect.y(),
+                self._desktop_rect.width(),
+                self._desktop_rect.height(),
+            ),
+            "canvas_size": (self.width(), self.height()),
+            "pixel_scale": round(self._pixel_scale, 2),
+            "primary_name": primary_name,
+            "screens": sorted(
+                (
+                    s.name(),
+                    s.geometry().x(),
+                    s.geometry().y(),
+                    s.geometry().width(),
+                    s.geometry().height(),
+                )
+                for s in screens
+            ),
+        }
 
     def export_png(self, path: str) -> bool:
         self._ensure_buffers()
@@ -324,7 +411,10 @@ class TrackCanvas(QWidget):
             self._raw_samples.append((float(pos.x()), float(pos.y()), dt_ms))
             self._has_written_first_row = True
         elif no_movement:
-            self._raw_samples.append((None, None, dt_ms))
+            if self._raw_samples and self._raw_samples[-1][0] is None and self._raw_samples[-1][1] is None:
+                self._raw_samples[-1] = (None, None, dt_ms)
+            else:
+                self._raw_samples.append((None, None, dt_ms))
         else:
             self._raw_samples.append((float(pos.x()), float(pos.y()), dt_ms))
 
@@ -354,7 +444,7 @@ class TrackCanvas(QWidget):
         d = dx * dx + dy * dy
 
         if d < self.DELAY_DISTANCE_QUAD:
-            self._radius += 0.3
+            self._radius += self.IDLE_RADIUS_STEP
         else:
             if self._radius > self.RADIUS_THRESHOLD:
                 max_radius = (self._desktop_rect.height() * 0.25) ** 2
@@ -457,7 +547,10 @@ class TrackCanvas(QWidget):
         prev = FloatPoint(first_x, first_y)
         stop = FloatPoint(first_x, first_y)
 
-        for x, y, _ in self._raw_samples[1:]:
+        prev_t = self._raw_samples[0][2]
+        for x, y, t in self._raw_samples[1:]:
+            dt = max(0, t - prev_t)
+            prev_t = t
             if x is None or y is None:
                 new_p = FloatPoint(prev.x, prev.y)
             else:
@@ -478,7 +571,10 @@ class TrackCanvas(QWidget):
             dy = new_p.y - stop.y
             d = dx * dx + dy * dy
             if d < self.DELAY_DISTANCE_QUAD:
-                radius += 0.3
+                if x is None or y is None:
+                    radius += self.IDLE_RADIUS_STEP * self._idle_ticks_for_delta(dt)
+                else:
+                    radius += self.IDLE_RADIUS_STEP
             else:
                 if radius > self.RADIUS_THRESHOLD:
                     max_radius = (self._desktop_rect.height() * 0.25) ** 2
