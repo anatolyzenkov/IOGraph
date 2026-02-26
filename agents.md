@@ -66,4 +66,12 @@ After each step:
 ### Implementation Rule
 - Do not implement ad-hoc updater logic that bypasses signed release artifacts.
 - Keep update pipeline deterministic and CI-driven; local manual releases are fallback only.
+
+## Git / Rollout Plan
+- Keep migration in the same repository (`anatolyzenkov/IOGraph`).
+- Preserve Java history as legacy baseline and mark last Java release with tag `java-v1.0.3`.
+- Push current Python work to branch `python-port` first; continue development there until CI packaging is ready.
+- Before packaging automation exists, publish only pre-releases/beta builds (no stable release).
+- Switch default branch/release line to Python only after build/update pipeline is working and validated.
+- Archive Java code in-place (`legacy/java/`) only when explicitly scheduled; do not delete Java immediately.
     
