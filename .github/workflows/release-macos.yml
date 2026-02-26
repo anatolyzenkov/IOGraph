@@ -29,6 +29,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
+          brew install create-dmg
 
       - name: Build macOS icon (.icns)
         run: |
@@ -71,17 +72,17 @@ jobs:
       - name: Prepare artifact
         run: |
           mkdir -p release
-          rm -rf build/dmg-root
-          mkdir -p build/dmg-root
-          cp -R "dist/IOGraph.app" "build/dmg-root/IOGraph.app"
-          ln -s /Applications "build/dmg-root/Applications"
           ditto -c -k --sequesterRsrc --keepParent dist/IOGraph.app release/IOGraph-macos.zip
-          hdiutil create \
-            -volname "IOGraph" \
-            -srcfolder "build/dmg-root" \
-            -ov \
-            -format UDBZ \
-            "release/IOGraph-macos.dmg"
+          create-dmg \
+            --volname "IOGraph" \
+            --window-pos 120 120 \
+            --window-size 640 420 \
+            --icon-size 110 \
+            --icon "IOGraph.app" 180 220 \
+            --app-drop-link 470 220 \
+            --format UDBZ \
+            "release/IOGraph-macos.dmg" \
+            "dist/"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
