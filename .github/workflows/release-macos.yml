@@ -71,12 +71,16 @@ jobs:
       - name: Prepare artifact
         run: |
           mkdir -p release
+          rm -rf build/dmg-root
+          mkdir -p build/dmg-root
+          cp -R "dist/IOGraph.app" "build/dmg-root/IOGraph.app"
+          ln -s /Applications "build/dmg-root/Applications"
           ditto -c -k --sequesterRsrc --keepParent dist/IOGraph.app release/IOGraph-macos.zip
           hdiutil create \
             -volname "IOGraph" \
-            -srcfolder "dist/IOGraph.app" \
+            -srcfolder "build/dmg-root" \
             -ov \
-            -format UDZO \
+            -format UDBZ \
             "release/IOGraph-macos.dmg"
 
       - name: Upload artifact
