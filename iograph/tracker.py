@@ -4,10 +4,10 @@ from dataclasses import dataclass
 from math import atan2, pi, sqrt
 from time import monotonic
 import sys
-from typing import Any
+from typing import Any, Callable
 
 from PyQt6.QtCore import QPointF, QRect, QRectF, QTimer, Qt
-from PyQt6.QtGui import QColor, QColorSpace, QCursor, QGuiApplication, QPainter, QPaintEvent, QPen, QPixmap
+from PyQt6.QtGui import QColor, QColorSpace, QCursor, QGuiApplication, QImage, QPainter, QPaintEvent, QPen, QPixmap
 from PyQt6.QtWidgets import QWidget
 
 
@@ -59,6 +59,7 @@ class TrackCanvas(QWidget):
         self._desktop_background_source: QPixmap | None = None
         self._tracking: bool = False
         self._last_elapsed_ms: int = 0
+        self._suspend_preview_updates: bool = False
 
         self._timer = QTimer(self)
         self._timer.setInterval(33)
@@ -230,50 +231,278 @@ class TrackCanvas(QWidget):
         }
 
     def export_png(self, path: str) -> bool:
-        self._ensure_buffers()
-        w = max(1, int(round(self._desktop_rect.width() * self._pixel_scale)))
-        h = max(1, int(round(self._desktop_rect.height() * self._pixel_scale)))
-        out = QPixmap(w, h)
-        bg = Qt.GlobalColor.black if self._colorful_scheme else Qt.GlobalColor.white
-        out.fill(bg)
+        state = self.snapshot_export_render_state()
+        image = self.render_export_image_from_state(state)
+        return self.save_image_with_profile(image, path)
 
-        p = QPainter(out)
-        try:
-            if self._use_desktop_background and self._desktop_background_source is not None:
-                src = self._desktop_background_source
-                source = QRectF(0.0, 0.0, float(src.width()), float(src.height()))
-                target = QRectF(0.0, 0.0, float(w), float(h))
-                p.drawPixmap(target, src, source)
-        finally:
-            p.end()
-        self._render_raw_on_pixmap(
-            out,
-            map_point=self._map_global_to_full,
-            stroke_scale=1.0 * self._pixel_scale,
+    def snapshot_preview_render_state(self) -> dict[str, Any]:
+        self._ensure_buffers()
+        bg = self._desktop_background_source.toImage() if self._use_desktop_background and self._desktop_background_source else None
+        return {
+            "raw_samples": list(self._raw_samples),
+            "ignore_mouse_stops": self._ignore_mouse_stops,
+            "colorful_scheme": self._colorful_scheme,
+            "desktop_rect": (
+                self._desktop_rect.x(),
+                self._desktop_rect.y(),
+                self._desktop_rect.width(),
+                self._desktop_rect.height(),
+            ),
+            "logical_size": (max(1, self.width()), max(1, self.height())),
+            "pixel_scale": self._pixel_scale,
+            "timer_interval_ms": self._timer.interval(),
+            "desktop_background": bg,
+        }
+
+    def snapshot_export_render_state(self) -> dict[str, Any]:
+        self._ensure_buffers()
+        bg = self._desktop_background_source.toImage() if self._use_desktop_background and self._desktop_background_source else None
+        return {
+            "raw_samples": list(self._raw_samples),
+            "ignore_mouse_stops": self._ignore_mouse_stops,
+            "colorful_scheme": self._colorful_scheme,
+            "desktop_rect": (
+                self._desktop_rect.x(),
+                self._desktop_rect.y(),
+                self._desktop_rect.width(),
+                self._desktop_rect.height(),
+            ),
+            "logical_size": (max(1, self._desktop_rect.width()), max(1, self._desktop_rect.height())),
+            "pixel_scale": self._pixel_scale,
+            "timer_interval_ms": self._timer.interval(),
+            "desktop_background": bg,
+        }
+
+    @staticmethod
+    def _draw_color_for(prev: tuple[float, float], new: tuple[float, float], colorful_scheme: bool) -> QColor:
+        if not colorful_scheme:
+            return QColor("black")
+        n = 1.0 + atan2(new[1] - prev[1], new[0] - prev[0]) / pi
+        n = (n + 0.25) % 1.0
+        colors = (QColor(255, 255, 0), QColor(0, 255, 255), QColor(255, 0, 255))
+        idx = int(len(colors) * n)
+        c0 = colors[idx]
+        c1 = colors[(idx + 1) % len(colors)]
+        t = len(colors) * n - idx
+        return QColor(
+            int(c0.red() + (c1.red() - c0.red()) * t),
+            int(c0.green() + (c1.green() - c0.green()) * t),
+            int(c0.blue() + (c1.blue() - c0.blue()) * t),
         )
 
-        # macOS export: tag PNG with Display P3 profile when available.
+    @classmethod
+    def _render_raw_on_image(
+        cls,
+        image: QImage,
+        raw_samples: list[tuple[float | None, float | None, int]],
+        colorful_scheme: bool,
+        ignore_mouse_stops: bool,
+        desktop_rect: tuple[int, int, int, int],
+        logical_size: tuple[int, int],
+        pixel_scale: float,
+        timer_interval_ms: int,
+        progress_cb: Callable[[QImage], None] | None = None,
+        progress_interval_ms: int = 80,
+    ) -> None:
+        if len(raw_samples) < 2:
+            if progress_cb is not None:
+                progress_cb(image.copy())
+            return
+
+        dx0, dy0, dw, dh = desktop_rect
+        lw, lh = logical_size
+        scale = min(max(1, lw) / max(1, dw), max(1, lh) / max(1, dh))
+        offx = (lw - dw * scale) * 0.5
+        offy = (lh - dh * scale) * 0.5
+        s = max(0.0001, pixel_scale)
+
+        def map_preview(pt: tuple[float, float]) -> tuple[float, float]:
+            x = ((pt[0] - dx0) * scale + offx) * s
+            y = ((pt[1] - dy0) * scale + offy) * s
+            return x, y
+
+        p = QPainter(image)
+        try:
+            p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            radius = 0.0
+            first = raw_samples[0]
+            if first[0] is None or first[1] is None:
+                return
+            if progress_cb is not None:
+                progress_cb(image.copy())
+            prev = (float(first[0]), float(first[1]))
+            stop = prev
+            prev_t = first[2]
+            next_emit = monotonic() + max(0.02, progress_interval_ms / 1000.0)
+
+            for i, (x, y, t) in enumerate(raw_samples[1:], start=1):
+                dt = max(0, int(t) - int(prev_t))
+                prev_t = int(t)
+                if x is None or y is None:
+                    new = prev
+                else:
+                    new = (float(x), float(y))
+
+                if prev != new:
+                    color = cls._draw_color_for(prev, new, colorful_scheme)
+                    pen = QPen(color)
+                    pen.setWidthF(max(0.0, cls.STROKE_WEIGHT * scale * s))
+                    p.setPen(pen)
+                    x0, y0 = map_preview(prev)
+                    x1, y1 = map_preview(new)
+                    p.drawLine(QPointF(x0, y0), QPointF(x1, y1))
+
+                if ignore_mouse_stops:
+                    prev = new
+                    if progress_cb is not None and (monotonic() >= next_emit or i == len(raw_samples) - 1):
+                        progress_cb(image.copy())
+                        next_emit = monotonic() + max(0.02, progress_interval_ms / 1000.0)
+                    continue
+
+                dxx = new[0] - stop[0]
+                dyy = new[1] - stop[1]
+                d = dxx * dxx + dyy * dyy
+                if d < cls.DELAY_DISTANCE_QUAD:
+                    if x is None or y is None:
+                        ticks = max(1.0, dt / float(max(1, timer_interval_ms)))
+                        radius += cls.IDLE_RADIUS_STEP * ticks
+                    else:
+                        radius += cls.IDLE_RADIUS_STEP
+                else:
+                    if radius > cls.RADIUS_THRESHOLD:
+                        radius = min(radius, (dh * 0.25) ** 2)
+                        color = cls._draw_color_for(prev, new, colorful_scheme)
+                        halo_d = int(2.0 * radius * scale * s)
+                        dot_d = int(2.0 * sqrt(radius) * scale * s)
+                        n = 200.0 * max(0.0, 1.0 - 2.0 * sqrt(radius) / cls.RADIUS_THRESHOLD)
+                        ch = 0 if colorful_scheme else 255
+                        halo = QColor(ch, ch, ch, int(n))
+                        cx, cy = map_preview(prev)
+                        hx = int(cx - halo_d * 0.5)
+                        hy = int(cy - halo_d * 0.5)
+                        tx = int(cx - dot_d * 0.5)
+                        ty = int(cy - dot_d * 0.5)
+                        p.setPen(Qt.PenStyle.NoPen)
+                        p.setBrush(halo)
+                        p.drawEllipse(hx, hy, halo_d, halo_d)
+                        p.setPen(QPen(color, max(0.0, cls.STROKE_WEIGHT * scale * s)))
+                        p.setBrush(Qt.BrushStyle.NoBrush)
+                        p.drawEllipse(hx, hy, halo_d, halo_d)
+                        p.setPen(Qt.PenStyle.NoPen)
+                        p.setBrush(color)
+                        p.drawEllipse(tx, ty, dot_d, dot_d)
+                    stop = new
+                    radius = 0.0
+                prev = new
+                if progress_cb is not None and (monotonic() >= next_emit or i == len(raw_samples) - 1):
+                    progress_cb(image.copy())
+                    next_emit = monotonic() + max(0.02, progress_interval_ms / 1000.0)
+        finally:
+            p.end()
+
+    @classmethod
+    def render_preview_image_from_state(cls, state: dict[str, Any]) -> QImage:
+        lw, lh = state["logical_size"]
+        s = float(state["pixel_scale"])
+        image = QImage(max(1, int(round(lw * s))), max(1, int(round(lh * s))), QImage.Format.Format_ARGB32_Premultiplied)
+        image.fill(Qt.GlobalColor.transparent)
+        cls._render_raw_on_image(
+            image=image,
+            raw_samples=state["raw_samples"],
+            colorful_scheme=state["colorful_scheme"],
+            ignore_mouse_stops=state["ignore_mouse_stops"],
+            desktop_rect=tuple(state["desktop_rect"]),
+            logical_size=tuple(state["logical_size"]),
+            pixel_scale=float(state["pixel_scale"]),
+            timer_interval_ms=int(state["timer_interval_ms"]),
+        )
+        return image
+
+    @classmethod
+    def render_preview_image_with_progress(
+        cls,
+        state: dict[str, Any],
+        progress_cb: Callable[[QImage], None],
+    ) -> QImage:
+        lw, lh = state["logical_size"]
+        s = float(state["pixel_scale"])
+        image = QImage(max(1, int(round(lw * s))), max(1, int(round(lh * s))), QImage.Format.Format_ARGB32_Premultiplied)
+        image.fill(Qt.GlobalColor.transparent)
+        cls._render_raw_on_image(
+            image=image,
+            raw_samples=state["raw_samples"],
+            colorful_scheme=state["colorful_scheme"],
+            ignore_mouse_stops=state["ignore_mouse_stops"],
+            desktop_rect=tuple(state["desktop_rect"]),
+            logical_size=tuple(state["logical_size"]),
+            pixel_scale=float(state["pixel_scale"]),
+            timer_interval_ms=int(state["timer_interval_ms"]),
+            progress_cb=progress_cb,
+        )
+        return image
+
+    @classmethod
+    def render_export_image_from_state(cls, state: dict[str, Any]) -> QImage:
+        lw, lh = state["logical_size"]
+        s = float(state["pixel_scale"])
+        image = QImage(max(1, int(round(lw * s))), max(1, int(round(lh * s))), QImage.Format.Format_ARGB32_Premultiplied)
+        bg = Qt.GlobalColor.black if state["colorful_scheme"] else Qt.GlobalColor.white
+        image.fill(bg)
+        bg_img = state.get("desktop_background")
+        if isinstance(bg_img, QImage):
+            p = QPainter(image)
+            try:
+                p.drawImage(QRectF(0.0, 0.0, float(image.width()), float(image.height())), bg_img, QRectF(0.0, 0.0, float(bg_img.width()), float(bg_img.height())))
+            finally:
+                p.end()
+        cls._render_raw_on_image(
+            image=image,
+            raw_samples=state["raw_samples"],
+            colorful_scheme=state["colorful_scheme"],
+            ignore_mouse_stops=state["ignore_mouse_stops"],
+            desktop_rect=tuple(state["desktop_rect"]),
+            logical_size=tuple(state["logical_size"]),
+            pixel_scale=float(state["pixel_scale"]),
+            timer_interval_ms=int(state["timer_interval_ms"]),
+        )
+        return image
+
+    @staticmethod
+    def save_image_with_profile(image: QImage, path: str) -> bool:
         if sys.platform == "darwin":
-            image = out.toImage()
             try:
                 image.setColorSpace(QColorSpace(QColorSpace.NamedColorSpace.DisplayP3))
             except Exception:
-                # Keep export robust even if color space API varies by Qt build.
                 pass
-            return image.save(path, "PNG")
-        return out.save(path, "PNG")
+        return image.save(path, "PNG")
 
-    def set_ignore_mouse_stops(self, value: bool) -> None:
+    def apply_preview_image(self, image: QImage, pixel_scale: float) -> bool:
+        self._ensure_buffers()
+        if self._preview_pixmap is None:
+            return False
+        expected_w = max(1, int(round(self.width() * pixel_scale)))
+        expected_h = max(1, int(round(self.height() * pixel_scale)))
+        if image.width() != expected_w or image.height() != expected_h:
+            return False
+        pix = QPixmap.fromImage(image)
+        pix.setDevicePixelRatio(pixel_scale)
+        self._preview_pixmap = pix
+        self.update()
+        return True
+
+    def set_ignore_mouse_stops(self, value: bool, rebuild: bool = True) -> None:
         if self._ignore_mouse_stops == value:
             return
         self._ignore_mouse_stops = value
-        self._rebuild_from_raw_samples()
+        if rebuild:
+            self._rebuild_from_raw_samples()
 
-    def set_colorful_scheme(self, value: bool) -> None:
+    def set_colorful_scheme(self, value: bool, rebuild: bool = True) -> None:
         if self._colorful_scheme == value:
             return
         self._colorful_scheme = value
-        self._rebuild_from_raw_samples()
+        if rebuild:
+            self._rebuild_from_raw_samples()
 
     def is_colorful_scheme(self) -> bool:
         return self._colorful_scheme
@@ -284,14 +513,15 @@ class TrackCanvas(QWidget):
             self.update_desktop_background()
         self.update()
 
-    def set_use_multiple_monitors(self, value: bool) -> None:
+    def set_use_multiple_monitors(self, value: bool, rebuild: bool = True) -> None:
         self._use_multiple_monitors = value
         self._refresh_desktop_geometry()
         self._update_projection()
         self._ensure_buffers()
         if self._use_desktop_background:
             self.update_desktop_background()
-        self._rebuild_from_raw_samples()
+        if rebuild:
+            self._rebuild_from_raw_samples()
 
     def is_use_multiple_monitors(self) -> bool:
         return self._use_multiple_monitors
@@ -341,6 +571,9 @@ class TrackCanvas(QWidget):
     def is_tracking(self) -> bool:
         return self._tracking
 
+    def set_suspend_preview_updates(self, value: bool) -> None:
+        self._suspend_preview_updates = value
+
     def get_elapsed_ms(self) -> int:
         if self._tracking and self._run_started_mono is not None:
             delta = int((monotonic() - self._run_started_mono) * 1000)
@@ -380,6 +613,8 @@ class TrackCanvas(QWidget):
     def resizeEvent(self, event) -> None:  # type: ignore[override]
         super().resizeEvent(event)
         self._ensure_buffers()
+        if self._suspend_preview_updates:
+            return
         self._rebuild_from_raw_samples()
 
     def _prepare_for_update(self) -> None:
@@ -420,7 +655,7 @@ class TrackCanvas(QWidget):
 
         update_rect = QRect()
 
-        if not no_movement:
+        if not no_movement and not self._suspend_preview_updates:
             prev_preview = self._map_global_to_preview(self._prev_p)
             new_preview = self._map_global_to_preview(self._new_p)
 
@@ -435,7 +670,7 @@ class TrackCanvas(QWidget):
 
         if self._ignore_mouse_stops:
             self._prev_p.set_from(self._new_p)
-            if not update_rect.isNull():
+            if not self._suspend_preview_updates and not update_rect.isNull():
                 self.update(update_rect)
             return
 
@@ -451,20 +686,21 @@ class TrackCanvas(QWidget):
                 self._radius = min(self._radius, max_radius)
                 c = self._get_draw_color()
 
-                preview_rect = self._draw_stop_ellipse(
-                    self._preview_pixmap,
-                    self._map_global_to_preview(self._prev_p),
-                    c,
-                    self._scale,
-                )
-                update_rect = update_rect.united(preview_rect)
+                if not self._suspend_preview_updates:
+                    preview_rect = self._draw_stop_ellipse(
+                        self._preview_pixmap,
+                        self._map_global_to_preview(self._prev_p),
+                        c,
+                        self._scale,
+                    )
+                    update_rect = update_rect.united(preview_rect)
 
             self._stop_p.set_from(self._new_p)
             self._radius = 0.0
 
         self._prev_p.set_from(self._new_p)
 
-        if not update_rect.isNull():
+        if not self._suspend_preview_updates and not update_rect.isNull():
             self.update(update_rect)
 
     def _draw_line(self, pix: QPixmap, p0: QPointF, p1: QPointF, color: QColor, width: float) -> None:

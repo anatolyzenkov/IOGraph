@@ -14,18 +14,34 @@ After each step:
 2. what remains next
 
 ## New Feature Baseline (raw-data-first session model)
-- Tracking raw data is the primary source of truth for the current session.
-- Switching drawing style must not force reset/confirmation:
-  - colorful <-> monochrome
-  - with stop circles <-> without stop circles
-  - app must re-render full canvas and preview from raw data in the new style.
-- On app start, recording starts automatically.
-- On app close, raw data is persisted to disk.
-- On next app start, raw data is restored and re-rendered.
-- Restored session must also restore timing labels:
-  - total time
-  - time period
-- Raw data is deleted only by explicit `Reset`.
+- Raw data is the source of truth for drawing and session restore.
+- Style/behavior switches must not reset session data:
+  - `Colorful` on/off
+  - `Ignore Mouse Stops` on/off
+  - `Use Multiple Monitors` on/off
+- These switches trigger re-render from raw data (preview + export) without confirmation dialogs.
+- App starts recording automatically on launch.
+- Session persistence:
+  - raw data is persisted on real app exit (not on tray hide),
+  - timing state is persisted and restored (`total time` + `time period`),
+  - raw data is cleared only by explicit `Reset`.
+- Storage model:
+  - raw data is stored in chunked NDJSON files (`raw_chunks/*.ndjson`) with metadata in `session_state.json`,
+  - startup loads chunked storage, with fallback compatibility for legacy inline `raw_samples`.
+- Render cache:
+  - preview cache and desktop background cache are saved on exit,
+  - caches are reused only when render signature matches current monitor/layout context,
+  - fallback path is always available (rebuild preview from raw, refresh desktop snapshot when needed).
+- Heavy render path:
+  - full PNG export is rendered from raw in background worker using `QImage`,
+  - preview rebuild is also performed in worker to reduce UI blocking.
+
+### Current Bug Being Fixed
+- Symptom:
+  - when `Ignore Mouse Stops = true` and switching style (for example B/W -> Colorful), only a central square updates first,
+  - then there is a pause,
+  - then final full re-render appears,
+  - expected progressive preview animation is not visible in some modes (notably with ).
 
 ## Build And Release (macOS first)
 ### Goal
@@ -80,3 +96,4 @@ After each step:
 ### Implementation Rule
 - Do not implement ad-hoc updater logic that bypasses signed release artifacts.
 - Keep update pipeline deterministic and CI-driven; local manual releases are fallback only.
+    

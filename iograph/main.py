@@ -4,8 +4,8 @@ import webbrowser
 from math import cos, pi
 import json
 
-from PyQt6.QtCore import QEvent, QSettings, QSize, Qt, QTimer, QStandardPaths
-from PyQt6.QtGui import QAction, QCursor, QFont, QGuiApplication, QIcon
+from PyQt6.QtCore import QEvent, QObject, QSettings, QSize, Qt, QThread, QTimer, QStandardPaths, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import QAction, QCursor, QFont, QGuiApplication, QIcon, QImage
 from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -27,6 +27,46 @@ import sys
 from .tracker import TrackCanvas
 
 
+class PreviewRenderWorker(QObject):
+    progress = pyqtSignal(int, object, float)  # request_id, QImage, pixel_scale
+    finished = pyqtSignal(int, object, float)  # request_id, QImage, pixel_scale
+    failed = pyqtSignal(str)
+
+    def __init__(self, request_id: int, state: dict) -> None:
+        super().__init__()
+        self._request_id = request_id
+        self._state = state
+
+    @pyqtSlot()
+    def run(self) -> None:
+        try:
+            image = TrackCanvas.render_preview_image_with_progress(
+                self._state,
+                lambda img: self.progress.emit(self._request_id, img, float(self._state["pixel_scale"])),
+            )
+            self.finished.emit(self._request_id, image, float(self._state["pixel_scale"]))
+        except Exception as exc:
+            self.failed.emit(str(exc))
+
+
+class ExportRenderWorker(QObject):
+    finished = pyqtSignal(bool, str)
+
+    def __init__(self, state: dict, path: str) -> None:
+        super().__init__()
+        self._state = state
+        self._path = path
+
+    @pyqtSlot()
+    def run(self) -> None:
+        try:
+            image = TrackCanvas.render_export_image_from_state(self._state)
+            ok = TrackCanvas.save_image_with_profile(image, self._path)
+            self.finished.emit(ok, self._path)
+        except Exception:
+            self.finished.emit(False, self._path)
+
+
 class MainWindow(QMainWindow):
     MAIN_FRAME_WIDTH = 720
     PANEL_HEIGHT = 66
@@ -37,6 +77,7 @@ class MainWindow(QMainWindow):
     _FACEBOOK_URL = "https://www.facebook.com/pages/IOGraphica/317794951637"
     _WEBSITE_URL = "https://iographica.com/"
     _SESSION_STATE_FILE = "session_state.json"
+    _SESSION_CHUNK_MS = 5 * 60 * 1000
 
     def __init__(self) -> None:
         super().__init__()
@@ -46,6 +87,15 @@ class MainWindow(QMainWindow):
         self._suppress_option_handlers = False
         self._force_quit_requested = False
         self._last_system_dark_mode = False
+        self._preview_render_thread: QThread | None = None
+        self._preview_render_worker: PreviewRenderWorker | None = None
+        self._preview_rerender_pending = False
+        self._preview_request_seq = 0
+        self._preview_active_request_id = 0
+        self._preview_saved_toggle_visible = True
+        self._preview_saved_fade_active = True
+        self._export_thread: QThread | None = None
+        self._export_worker: ExportRenderWorker | None = None
         self._pending_snapshot_restore_visible = False
         self._pending_snapshot_restore_minimized = False
         self._setup_auto_hide_timer = QTimer(self)
@@ -292,7 +342,7 @@ class MainWindow(QMainWindow):
 
         self._ignore_stops_action = QAction("Ignore Mouse Stops", self)
         self._ignore_stops_action.setCheckable(True)
-        self._ignore_stops_action.toggled.connect(self._canvas.set_ignore_mouse_stops)
+        self._ignore_stops_action.toggled.connect(self._on_ignore_stops_toggled)
         options_menu.addAction(self._ignore_stops_action)
 
         self._colorful_action = QAction("Colorful Scheme", self)
@@ -398,6 +448,13 @@ class MainWindow(QMainWindow):
     def _on_toggle_clicked(self, checked: bool) -> None:
         self._set_tracking(checked)
 
+    def _on_ignore_stops_toggled(self, checked: bool) -> None:
+        if self._suppress_option_handlers:
+            return
+        self._canvas.set_ignore_mouse_stops(checked, rebuild=False)
+        self._request_preview_rerender()
+        self._sync_ui_state()
+
     def _reset_canvas(self) -> None:
         if self._canvas.get_elapsed_ms() > 0:
             if not self._confirm_reset():
@@ -423,6 +480,9 @@ class MainWindow(QMainWindow):
         self._status("Canvas reset")
 
     def _save_image(self) -> None:
+        if self._export_thread is not None:
+            self._status("Export is already running")
+            return
         default_dir = self._default_save_dir()
         path, _ = QFileDialog.getSaveFileName(
             self,
@@ -436,9 +496,7 @@ class MainWindow(QMainWindow):
         if image_path.suffix.lower() != ".png":
             image_path = image_path.with_suffix(".png")
         self._remember_save_dir(image_path.parent)
-        ok = self._canvas.export_png(str(image_path))
-        self._status("Image saved" if ok else "Failed to save image")
-        self._sync_ui_state()
+        self._start_export_worker(str(image_path))
 
     def _save_csv(self) -> None:
         default_dir = self._default_save_dir()
@@ -457,6 +515,35 @@ class MainWindow(QMainWindow):
         csv_path.write_text(self._canvas.export_csv_text(), encoding="utf-8")
         self._status("CSV saved")
         self._sync_ui_state()
+
+    def _start_export_worker(self, path: str) -> None:
+        state = self._canvas.snapshot_export_render_state()
+        thread = QThread(self)
+        worker = ExportRenderWorker(state, path)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.finished.connect(self._on_export_finished)
+        worker.finished.connect(thread.quit)
+        worker.finished.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+        thread.finished.connect(self._on_export_thread_closed)
+        self._export_thread = thread
+        self._export_worker = worker
+        self._status("Exporting image...")
+        self._save_btn.setEnabled(False)
+        self._save_image_action.setEnabled(False)
+        tray_save = getattr(self, "_tray_save_image_action", None)
+        if tray_save is not None:
+            tray_save.setEnabled(False)
+        thread.start()
+
+    def _on_export_finished(self, ok: bool, _path: str) -> None:
+        self._status("Image saved" if ok else "Failed to save image")
+        self._sync_ui_state()
+
+    def _on_export_thread_closed(self) -> None:
+        self._export_thread = None
+        self._export_worker = None
 
     def _default_save_dir(self) -> Path:
         saved = self._settings.value("options/last_save_dir", "", str)
@@ -485,6 +572,68 @@ class MainWindow(QMainWindow):
             self._refresh_desktop_snapshot()
         else:
             self._status("Desktop background disabled")
+
+    def _request_preview_rerender(self) -> None:
+        if self._preview_render_thread is not None:
+            self._preview_rerender_pending = True
+            return
+        self._canvas.set_suspend_preview_updates(True)
+        self._preview_saved_toggle_visible = self._toggle_btn.isVisible()
+        self._preview_saved_fade_active = self._toggle_fade_timer.isActive()
+        self._toggle_fade_timer.stop()
+        self._toggle_btn.setVisible(False)
+        self._preview_request_seq += 1
+        state = self._canvas.snapshot_preview_render_state()
+        thread = QThread(self)
+        request_id = self._preview_request_seq
+        self._preview_active_request_id = request_id
+        worker = PreviewRenderWorker(request_id, state)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.progress.connect(self._on_preview_rerender_progress)
+        worker.finished.connect(self._on_preview_rerender_ready)
+        worker.finished.connect(thread.quit)
+        worker.finished.connect(worker.deleteLater)
+        worker.failed.connect(self._on_preview_rerender_failed)
+        worker.failed.connect(thread.quit)
+        worker.failed.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+        thread.finished.connect(self._on_preview_thread_closed)
+        self._preview_render_thread = thread
+        self._preview_render_worker = worker
+        self._status("Rendering preview...")
+        thread.start()
+
+    def _on_preview_rerender_progress(self, request_id: int, image: QImage, pixel_scale: float) -> None:
+        if request_id != self._preview_active_request_id:
+            return
+        self._canvas.apply_preview_image(image, pixel_scale)
+        self._status("Rendering preview...")
+
+    def _on_preview_rerender_ready(self, request_id: int, image: QImage, pixel_scale: float) -> None:
+        if request_id != self._preview_active_request_id:
+            return
+        if not self._canvas.apply_preview_image(image, pixel_scale):
+            self._canvas.rebuild_from_raw_samples()
+        self._status("Preview rendered")
+        self._sync_ui_state()
+
+    def _on_preview_rerender_failed(self, _error: str) -> None:
+        self._canvas.rebuild_from_raw_samples()
+        self._sync_ui_state()
+
+    def _on_preview_thread_closed(self) -> None:
+        self._preview_render_thread = None
+        self._preview_render_worker = None
+        self._preview_active_request_id = 0
+        self._canvas.set_suspend_preview_updates(False)
+        if self._preview_saved_fade_active:
+            self._toggle_fade_timer.start()
+        self._toggle_btn.setVisible(self._preview_saved_toggle_visible)
+        self._animate_toggle_opacity()
+        if self._preview_rerender_pending:
+            self._preview_rerender_pending = False
+            self._request_preview_rerender()
 
     def _refresh_desktop_snapshot(self) -> None:
         # Two-phase hide/capture: handles startup case when window becomes visible after scheduling.
@@ -522,10 +671,12 @@ class MainWindow(QMainWindow):
             return
         if checked == self._canvas.is_use_multiple_monitors():
             return
-        self._canvas.set_use_multiple_monitors(checked)
+        self._canvas.set_suspend_preview_updates(True)
+        self._canvas.set_use_multiple_monitors(checked, rebuild=False)
         if self._use_desktop_action.isChecked():
             self._refresh_desktop_snapshot()
         self._apply_window_geometry()
+        self._request_preview_rerender()
         self._sync_ui_state()
 
     def _load_settings(self) -> None:
@@ -536,9 +687,9 @@ class MainWindow(QMainWindow):
         auto_update = self._settings.value("options/automatic_update", False, bool)
 
         # Apply to runtime first (source of truth), then mirror in UI without signal side-effects.
-        self._canvas.set_ignore_mouse_stops(ignore_stops)
-        self._canvas.set_colorful_scheme(colorful)
-        self._canvas.set_use_multiple_monitors(use_multi_monitor)
+        self._canvas.set_ignore_mouse_stops(ignore_stops, rebuild=False)
+        self._canvas.set_colorful_scheme(colorful, rebuild=False)
+        self._canvas.set_use_multiple_monitors(use_multi_monitor, rebuild=False)
         self._canvas.set_use_desktop_background(use_desktop)
 
         self._set_checked_silent(self._ignore_stops_action, ignore_stops)
@@ -576,15 +727,19 @@ class MainWindow(QMainWindow):
     def _desktop_cache_path(self) -> Path:
         return self._session_state_path().with_name("desktop_cache.png")
 
+    def _raw_chunks_dir(self) -> Path:
+        return self._session_state_path().with_name("raw_chunks")
+
     def _save_session_state(self) -> None:
         signature = self._canvas.render_cache_signature()
         preview_saved = self._canvas.export_preview_cache(str(self._preview_cache_path()))
         desktop_saved = self._canvas.export_desktop_background_cache(str(self._desktop_cache_path()))
+        raw_storage = self._write_raw_chunks(self._canvas.export_raw_samples())
         state = {
             "version": 1,
             "session_started_at": self._session_started_at.isoformat() if self._session_started_at else None,
             "session_ended_at": self._session_ended_at.isoformat() if self._session_ended_at else None,
-            "raw_samples": self._canvas.export_raw_samples(),
+            "raw_storage": raw_storage,
             "render_signature": signature,
             "preview_cache_saved": preview_saved,
             "desktop_cache_saved": desktop_saved,
@@ -606,19 +761,19 @@ class MainWindow(QMainWindow):
         if not isinstance(payload, dict):
             return
 
-        raw_samples = payload.get("raw_samples", [])
+        raw_samples = self._read_raw_samples(payload)
         signature = payload.get("render_signature")
         use_cache = signature == self._canvas.render_cache_signature()
         loaded_preview_cache = False
         loaded_desktop_cache = False
-        if isinstance(raw_samples, list):
-            self._canvas.load_raw_samples(raw_samples, rebuild=not use_cache)
+        if raw_samples:
+            self._canvas.load_raw_samples(raw_samples, rebuild=False)
         if use_cache and payload.get("preview_cache_saved", False):
             loaded_preview_cache = self._canvas.load_preview_cache(str(self._preview_cache_path()))
         if use_cache and self._use_desktop_action.isChecked() and payload.get("desktop_cache_saved", False):
             loaded_desktop_cache = self._canvas.load_desktop_background_cache(str(self._desktop_cache_path()))
         if not loaded_preview_cache:
-            self._canvas.rebuild_from_raw_samples()
+            self._request_preview_rerender()
         if self._use_desktop_action.isChecked() and not loaded_desktop_cache:
             self._refresh_desktop_snapshot()
 
@@ -660,6 +815,83 @@ class MainWindow(QMainWindow):
                 desktop_cache.unlink()
             except OSError:
                 pass
+        chunks_dir = self._raw_chunks_dir()
+        if chunks_dir.exists() and chunks_dir.is_dir():
+            for f in chunks_dir.glob("*.ndjson"):
+                try:
+                    f.unlink()
+                except OSError:
+                    pass
+            try:
+                chunks_dir.rmdir()
+            except OSError:
+                pass
+
+    def _write_raw_chunks(self, rows: list[dict]) -> dict:
+        chunks_dir = self._raw_chunks_dir()
+        chunks_dir.mkdir(parents=True, exist_ok=True)
+        for old in chunks_dir.glob("*.ndjson"):
+            try:
+                old.unlink()
+            except OSError:
+                pass
+
+        chunk_ms = self._SESSION_CHUNK_MS
+        buckets: dict[int, list[dict]] = {}
+        for row in rows:
+            t = int(row.get("t", 0))
+            key = max(0, t // chunk_ms)
+            buckets.setdefault(key, []).append(row)
+
+        index: list[dict] = []
+        for key in sorted(buckets.keys()):
+            chunk_rows = buckets[key]
+            fname = f"chunk_{key:06d}.ndjson"
+            path = chunks_dir / fname
+            with path.open("w", encoding="utf-8") as f:
+                for row in chunk_rows:
+                    f.write(json.dumps(row, ensure_ascii=False) + "\n")
+            index.append(
+                {
+                    "file": fname,
+                    "first_t": int(chunk_rows[0].get("t", 0)),
+                    "last_t": int(chunk_rows[-1].get("t", 0)),
+                    "count": len(chunk_rows),
+                }
+            )
+        return {"format": "ndjson-chunks", "chunk_ms": chunk_ms, "chunks": index}
+
+    def _read_raw_samples(self, payload: dict) -> list[dict]:
+        storage = payload.get("raw_storage")
+        if isinstance(storage, dict) and storage.get("format") == "ndjson-chunks":
+            chunks = storage.get("chunks", [])
+            rows: list[dict] = []
+            if isinstance(chunks, list):
+                for chunk in chunks:
+                    if not isinstance(chunk, dict):
+                        continue
+                    name = chunk.get("file")
+                    if not isinstance(name, str):
+                        continue
+                    path = self._raw_chunks_dir() / name
+                    if not path.exists():
+                        continue
+                    try:
+                        for line in path.read_text(encoding="utf-8").splitlines():
+                            if not line.strip():
+                                continue
+                            row = json.loads(line)
+                            if isinstance(row, dict):
+                                rows.append(row)
+                    except Exception:
+                        continue
+            return rows
+
+        # Backward compatibility with old inline format.
+        inline = payload.get("raw_samples", [])
+        if isinstance(inline, list):
+            return [r for r in inline if isinstance(r, dict)]
+        return []
 
     def closeEvent(self, event) -> None:  # type: ignore[override]
         if getattr(self, "_tray_icon", None) is not None and not self._force_quit_requested:
@@ -962,7 +1194,8 @@ class MainWindow(QMainWindow):
             return
         if checked == self._canvas.is_colorful_scheme():
             return
-        self._canvas.set_colorful_scheme(checked)
+        self._canvas.set_colorful_scheme(checked, rebuild=False)
+        self._request_preview_rerender()
         self._refresh_dpi_dependent_icons()
         self._sync_ui_state()
 
