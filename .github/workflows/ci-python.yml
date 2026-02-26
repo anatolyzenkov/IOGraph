@@ -4,9 +4,23 @@ on:
   push:
     branches:
       - python-port
+    paths:
+      - "iograph/**"
+      - "requirements.txt"
+      - ".github/workflows/ci-python.yml"
+      - ".github/workflows/release-macos.yml"
   pull_request:
     branches:
       - python-port
+    paths:
+      - "iograph/**"
+      - "requirements.txt"
+      - ".github/workflows/ci-python.yml"
+      - ".github/workflows/release-macos.yml"
+
+concurrency:
+  group: ci-python-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   ci:
