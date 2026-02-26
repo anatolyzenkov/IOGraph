@@ -3,6 +3,7 @@ from datetime import datetime
 import webbrowser
 from math import cos, pi
 import json
+import os
 
 from PyQt6.QtCore import QEvent, QObject, QSettings, QSize, Qt, QThread, QTimer, QStandardPaths, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QAction, QCursor, QFont, QGuiApplication, QIcon, QImage
@@ -76,6 +77,7 @@ class MainWindow(QMainWindow):
     _GITHUB_URL = "https://github.com/anatolyzenkov/iograph"
     _FACEBOOK_URL = "https://www.facebook.com/pages/IOGraphica/317794951637"
     _WEBSITE_URL = "https://iographica.com/"
+    _APP_VERSION = os.environ.get("IOGRAPH_VERSION", "dev")
     _SESSION_STATE_FILE = "session_state.json"
     _SESSION_CHUNK_MS = 5 * 60 * 1000
 
@@ -1293,7 +1295,7 @@ class MainWindow(QMainWindow):
         QMessageBox.information(
             self,
             "About IOGraph",
-            "IOGraph (Python port)\nPorted from the original Java version.",
+            f"IOGraph {self._APP_VERSION}\nTurn your routine work into contemporary art",
         )
 
     def _check_for_updates_placeholder(self) -> None:

@@ -12,6 +12,8 @@ permissions:
 jobs:
   build-macos:
     runs-on: macos-latest
+    env:
+      IOGRAPH_VERSION: ${{ github.ref_name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -53,6 +55,13 @@ jobs:
             --add-data "iograph/resources:iograph/resources" \
             --collect-all PyQt6 \
             run_iograph.py
+
+      - name: Set app bundle version metadata
+        run: |
+          APP_PLIST="dist/IOGraph.app/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${IOGRAPH_VERSION}" "$APP_PLIST" || /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string ${IOGRAPH_VERSION}" "$APP_PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${GITHUB_RUN_NUMBER}" "$APP_PLIST" || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string ${GITHUB_RUN_NUMBER}" "$APP_PLIST"
+          /usr/libexec/PlistBuddy -c "Set :LSUIElement true" "$APP_PLIST" || /usr/libexec/PlistBuddy -c "Add :LSUIElement bool true" "$APP_PLIST"
 
       - name: Prepare artifact
         run: |
