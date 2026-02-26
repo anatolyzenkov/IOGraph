@@ -63,6 +63,11 @@ jobs:
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${GITHUB_RUN_NUMBER}" "$APP_PLIST" || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string ${GITHUB_RUN_NUMBER}" "$APP_PLIST"
           /usr/libexec/PlistBuddy -c "Set :LSUIElement true" "$APP_PLIST" || /usr/libexec/PlistBuddy -c "Add :LSUIElement bool true" "$APP_PLIST"
 
+      - name: Re-sign app bundle (ad-hoc for beta)
+        run: |
+          codesign --force --deep --sign - dist/IOGraph.app
+          codesign --verify --deep --strict --verbose=2 dist/IOGraph.app
+
       - name: Prepare artifact
         run: |
           mkdir -p release
