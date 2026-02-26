@@ -72,6 +72,9 @@ jobs:
       - name: Prepare artifact
         run: |
           mkdir -p release
+          rm -rf build/dmg-root
+          mkdir -p build/dmg-root
+          cp -R "dist/IOGraph.app" "build/dmg-root/IOGraph.app"
           ditto -c -k --sequesterRsrc --keepParent dist/IOGraph.app release/IOGraph-macos.zip
           create-dmg \
             --volname "IOGraph" \
@@ -82,7 +85,7 @@ jobs:
             --app-drop-link 470 220 \
             --format UDBZ \
             "release/IOGraph-macos.dmg" \
-            "dist/"
+            "build/dmg-root"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
