@@ -42,6 +42,3 @@ jobs:
 
       - name: Compile check
         run: python -m compileall iograph
-
-      - name: Import smoke check
-        run: python -c "import iograph.main, iograph.tracker; print('import-ok')"

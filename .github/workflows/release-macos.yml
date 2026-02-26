@@ -36,7 +36,7 @@ jobs:
             --name IOGraph \
             --add-data "iograph/resources:iograph/resources" \
             --collect-all PyQt6 \
-            iograph/main.py
+            run_iograph.py
 
       - name: Prepare artifact
         run: |
