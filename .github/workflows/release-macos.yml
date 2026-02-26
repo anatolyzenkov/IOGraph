@@ -72,16 +72,26 @@ jobs:
         run: |
           mkdir -p release
           ditto -c -k --sequesterRsrc --keepParent dist/IOGraph.app release/IOGraph-macos.zip
+          hdiutil create \
+            -volname "IOGraph" \
+            -srcfolder "dist/IOGraph.app" \
+            -ov \
+            -format UDZO \
+            "release/IOGraph-macos.dmg"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: IOGraph-macos
-          path: release/IOGraph-macos.zip
+          path: |
+            release/IOGraph-macos.zip
+            release/IOGraph-macos.dmg
 
       - name: Publish GitHub Release asset
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: release/IOGraph-macos.zip
+          files: |
+            release/IOGraph-macos.zip
+            release/IOGraph-macos.dmg
           prerelease: ${{ contains(github.ref_name, '-') }}
