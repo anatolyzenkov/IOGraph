@@ -246,6 +246,7 @@ class MainWindow(QMainWindow):
     _SESSION_STATE_FILE = "session_state.json"
     _SESSION_CHUNK_MS = 5 * 60 * 1000
     _VERSION_FILE = Path(__file__).resolve().parent.parent / "VERSION"
+    _AUTO_UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000
 
     def __init__(self) -> None:
         super().__init__()
@@ -275,6 +276,9 @@ class MainWindow(QMainWindow):
         self._setup_auto_hide_timer.setSingleShot(True)
         self._setup_auto_hide_timer.setInterval(10000)
         self._setup_auto_hide_timer.timeout.connect(lambda: self._setup_btn.setChecked(False))
+        self._auto_update_timer = QTimer(self)
+        self._auto_update_timer.setInterval(self._AUTO_UPDATE_INTERVAL_MS)
+        self._auto_update_timer.timeout.connect(lambda: self._check_for_updates(manual=False))
         self._panel_anim_timer = QTimer(self)
         self._panel_anim_timer.setInterval(20)
         self._panel_anim_timer.timeout.connect(self._on_panel_anim_tick)
@@ -471,6 +475,7 @@ class MainWindow(QMainWindow):
             app.screenAdded.connect(lambda screen: self._apply_window_geometry())
             app.screenRemoved.connect(lambda screen: self._apply_window_geometry())
         self._setup_tray()
+        self._update_install_update_actions()
         self._refresh_dpi_dependent_icons()
         self._position_toggle_button()
         self._set_tracking(True)
@@ -559,6 +564,10 @@ class MainWindow(QMainWindow):
         self._auto_update_action.setCheckable(True)
         self._auto_update_action.toggled.connect(self._on_auto_update_toggled)
         help_menu.addAction(self._auto_update_action)
+        install_downloaded_action = QAction("Install Downloaded Update", self)
+        install_downloaded_action.triggered.connect(self._open_downloaded_update)
+        help_menu.addAction(install_downloaded_action)
+        self._install_downloaded_update_action = install_downloaded_action
 
         help_menu.addSeparator()
         facebook_action = QAction("Join our Facebook Community...", self)
@@ -597,6 +606,8 @@ class MainWindow(QMainWindow):
         self._tray_auto_update_action = more_menu.addAction("Check for Updates Automatically")
         self._tray_auto_update_action.setCheckable(True)
         self._tray_auto_update_action.toggled.connect(self._on_auto_update_toggled)
+        self._tray_install_update_action = more_menu.addAction("Install Downloaded Update")
+        self._tray_install_update_action.triggered.connect(self._open_downloaded_update)
         more_menu.addSeparator()
         more_menu.addAction("Get Source Code from GitHub", lambda: self._open_url(self._GITHUB_URL))
         more_menu.addAction("Join Our Facebook Community", lambda: self._open_url(self._FACEBOOK_URL))
@@ -608,6 +619,7 @@ class MainWindow(QMainWindow):
         self._tray_icon.setContextMenu(tray_menu)
         self._tray_icon.activated.connect(self._on_tray_activated)
         self._tray_icon.show()
+        self._set_auto_update_state(self._auto_update_action.isChecked())
         self._update_tray_state()
 
     def _bind_control_panel(self) -> None:
@@ -859,7 +871,7 @@ class MainWindow(QMainWindow):
         colorful = self._settings.value("options/colorful_scheme", False, bool)
         use_desktop = self._settings.value("options/use_desktop_background", False, bool)
         use_multi_monitor = self._settings.value("options/use_multiple_monitors", True, bool)
-        auto_update = self._settings.value("options/automatic_update", False, bool)
+        auto_update = self._settings.value("options/automatic_update", True, bool)
 
         # Apply to runtime first (source of truth), then mirror in UI without signal side-effects.
         self._canvas.set_ignore_mouse_stops(ignore_stops, rebuild=False)
@@ -1534,10 +1546,12 @@ class MainWindow(QMainWindow):
             self._status("No updates found")
             return
         if not manual:
-            last_prompted = self._settings.value("updates/last_prompted_version", "", str)
-            if last_prompted == latest_tag:
-                return
-            self._settings.setValue("updates/last_prompted_version", latest_tag)
+            last_downloaded = self._settings.value("updates/last_auto_downloaded_version", "", str)
+            if last_downloaded == latest_tag:
+                saved_path = self._settings.value("updates/last_downloaded_path", "", str)
+                if saved_path and Path(saved_path).exists():
+                    return
+                self._settings.remove("updates/last_auto_downloaded_version")
         if self._update_download_thread is not None:
             return
         if manual:
@@ -1550,14 +1564,12 @@ class MainWindow(QMainWindow):
                 QMessageBox.StandardButton.Yes,
             )
             if answer != QMessageBox.StandardButton.Yes:
-                if release_url:
-                    self._open_url(release_url)
                 return
         if not asset_url or not asset_name:
             if manual and release_url:
                 self._open_url(release_url)
             return
-        self._start_update_download(latest_version, asset_url, asset_name)
+        self._start_update_download(latest_version, asset_url, asset_name, manual)
         self._status("Update available")
 
     def _on_update_check_thread_closed(self) -> None:
@@ -1565,15 +1577,17 @@ class MainWindow(QMainWindow):
         self._update_check_worker = None
         self._set_update_check_busy(False)
 
-    def _start_update_download(self, latest_version: str, asset_url: str, asset_name: str) -> None:
+    def _start_update_download(self, latest_version: str, asset_url: str, asset_name: str, manual: bool) -> None:
         if self._update_download_thread is not None:
             return
-        target = self._update_target_path(asset_name, latest_version)
+        target = self._update_target_path(asset_name, latest_version, manual)
         thread = QThread(self)
         worker = UpdateDownloadWorker(asset_url, str(target))
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
-        worker.finished.connect(lambda ok, path, err: self._on_update_download_finished(ok, path, err, latest_version))
+        worker.finished.connect(
+            lambda ok, path, err, is_manual=manual: self._on_update_download_finished(ok, path, err, latest_version, is_manual)
+        )
         worker.finished.connect(thread.quit)
         worker.finished.connect(worker.deleteLater)
         thread.finished.connect(thread.deleteLater)
@@ -1584,21 +1598,38 @@ class MainWindow(QMainWindow):
         self._status("Downloading update...")
         thread.start()
 
-    def _update_target_path(self, asset_name: str, latest_version: str) -> Path:
-        downloads = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DownloadLocation)
-        target_dir = Path(downloads) if downloads else (Path.home() / "Downloads")
+    def _update_target_path(self, asset_name: str, latest_version: str, manual: bool) -> Path:
+        if manual:
+            downloads = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DownloadLocation)
+            target_dir = Path(downloads) if downloads else (Path.home() / "Downloads")
+            target_dir.mkdir(parents=True, exist_ok=True)
+            base = target_dir / asset_name
+            if not base.exists():
+                return base
+            stem, suffix = base.stem, base.suffix
+            return target_dir / f"{stem}-{latest_version}{suffix}"
+        target_dir = Path.home() / "Library" / "Application Support" / "IOGraph" / "updates"
         target_dir.mkdir(parents=True, exist_ok=True)
-        base = target_dir / asset_name
-        if not base.exists():
-            return base
-        stem, suffix = base.stem, base.suffix
-        return target_dir / f"{stem}-{latest_version}{suffix}"
+        # Auto-update keeps a single rolling installer file per platform asset.
+        return target_dir / asset_name
 
-    def _on_update_download_finished(self, ok: bool, path: str, error: str, latest_version: str) -> None:
+    def _on_update_download_finished(self, ok: bool, path: str, error: str, latest_version: str, manual: bool) -> None:
         if not ok:
-            QMessageBox.warning(self, "Update Download", f"Failed to download IOGraph {latest_version}:\n{error}")
+            if manual:
+                QMessageBox.warning(self, "Update Download", f"Failed to download IOGraph {latest_version}:\n{error}")
+            else:
+                self._status("Background update download failed")
             return
         local = Path(path)
+        self._settings.setValue("updates/last_downloaded_path", str(local))
+        self._settings.setValue("updates/last_downloaded_version", f"v{latest_version}")
+        self._update_install_update_actions()
+        if not manual:
+            self._settings.setValue("updates/last_auto_downloaded_version", f"v{latest_version}")
+            self._settings.setValue("updates/last_prompted_version", f"v{latest_version}")
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(local)))
+            self._status("Update downloaded and opened")
+            return
         answer = QMessageBox.question(
             self,
             "Update Downloaded",
@@ -1619,6 +1650,31 @@ class MainWindow(QMainWindow):
         tray_check = getattr(self, "_tray_check_updates_action", None)
         if tray_check is not None:
             tray_check.setEnabled(not busy)
+        self._update_install_update_actions()
+
+    def _update_install_update_actions(self) -> None:
+        path = self._settings.value("updates/last_downloaded_path", "", str)
+        has_file = bool(path and Path(path).exists())
+        action = getattr(self, "_install_downloaded_update_action", None)
+        if action is not None:
+            action.setEnabled(has_file)
+        tray_action = getattr(self, "_tray_install_update_action", None)
+        if tray_action is not None:
+            tray_action.setEnabled(has_file)
+
+    def _open_downloaded_update(self) -> None:
+        path = self._settings.value("updates/last_downloaded_path", "", str)
+        if not path:
+            QMessageBox.information(self, "Install Downloaded Update", "No downloaded update was found.")
+            return
+        local = Path(path)
+        if not local.exists():
+            self._settings.remove("updates/last_downloaded_path")
+            self._settings.remove("updates/last_downloaded_version")
+            self._update_install_update_actions()
+            QMessageBox.information(self, "Install Downloaded Update", "Downloaded update file no longer exists.")
+            return
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(local)))
 
     def _status(self, _message: str) -> None:
         # Java version has no Qt status bar; keep this as no-op to avoid affecting layout height.
@@ -1628,6 +1684,7 @@ class MainWindow(QMainWindow):
         if self._suppress_option_handlers:
             return
         self._set_auto_update_state(checked)
+        self._settings.setValue("options/automatic_update", checked)
 
     def _set_auto_update_state(self, checked: bool) -> None:
         self._suppress_option_handlers = True
@@ -1638,6 +1695,10 @@ class MainWindow(QMainWindow):
                 tray_auto.setChecked(checked)
         finally:
             self._suppress_option_handlers = False
+        if checked:
+            self._auto_update_timer.start()
+        else:
+            self._auto_update_timer.stop()
 
     def event(self, event) -> bool:  # type: ignore[override]
         event_type = event.type()
