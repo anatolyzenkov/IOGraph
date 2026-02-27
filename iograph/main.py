@@ -464,6 +464,7 @@ class MainWindow(QMainWindow):
         self._setup_actions()
         self._bind_control_panel()
         self._load_settings()
+        self._cleanup_downloaded_update_if_installed()
         self._apply_window_geometry()
         self._load_session_state()
         self._ui_timer = QTimer(self)
@@ -1507,6 +1508,35 @@ class MainWindow(QMainWindow):
             pass
         return "dev"
 
+    @staticmethod
+    def _normalize_version_tag(version: str) -> str:
+        v = version.strip()
+        if v.lower().startswith("v"):
+            return v[1:]
+        return v
+
+    def _cleanup_downloaded_update_if_installed(self) -> None:
+        downloaded = self._settings.value("updates/last_downloaded_version", "", str)
+        if not downloaded:
+            return
+        current = self._normalize_version_tag(self._app_version)
+        target = self._normalize_version_tag(downloaded)
+        current_key = UpdateCheckWorker._version_key(current)
+        target_key = UpdateCheckWorker._version_key(target)
+        if current_key is None or target_key is None or current_key < target_key:
+            return
+        path = self._settings.value("updates/last_downloaded_path", "", str)
+        if path:
+            p = Path(path)
+            try:
+                if p.exists():
+                    p.unlink()
+            except Exception:
+                pass
+        self._settings.remove("updates/last_downloaded_path")
+        self._settings.remove("updates/last_downloaded_version")
+        self._settings.remove("updates/last_auto_downloaded_version")
+
     def _check_for_updates(self, manual: bool) -> None:
         if self._update_check_thread is not None:
             if manual:
@@ -1621,24 +1651,25 @@ class MainWindow(QMainWindow):
                 self._status("Background update download failed")
             return
         local = Path(path)
+        tagged_version = f"v{latest_version}"
         self._settings.setValue("updates/last_downloaded_path", str(local))
-        self._settings.setValue("updates/last_downloaded_version", f"v{latest_version}")
+        self._settings.setValue("updates/last_downloaded_version", tagged_version)
         self._update_install_update_actions()
         if not manual:
-            self._settings.setValue("updates/last_auto_downloaded_version", f"v{latest_version}")
-            self._settings.setValue("updates/last_prompted_version", f"v{latest_version}")
-            QDesktopServices.openUrl(QUrl.fromLocalFile(str(local)))
-            self._status("Update downloaded and opened")
-            return
-        answer = QMessageBox.question(
+            self._settings.setValue("updates/last_auto_downloaded_version", tagged_version)
+            self._settings.setValue("updates/last_prompted_version", tagged_version)
+        prompt = QMessageBox.question(
             self,
-            "Update Downloaded",
-            f"IOGraph {latest_version} downloaded to:\n{local}\n\nOpen it now?",
+            "Update Ready",
+            f"IOGraph {latest_version} is downloaded and ready to install.\n\nInstall now?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.Yes,
         )
-        if answer == QMessageBox.StandardButton.Yes:
+        if prompt == QMessageBox.StandardButton.Yes:
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(local)))
+            self._status("Update downloaded and opened")
+            return
+        self._status("Update downloaded")
 
     def _on_update_download_thread_closed(self) -> None:
         self._update_download_thread = None
@@ -1654,12 +1685,16 @@ class MainWindow(QMainWindow):
 
     def _update_install_update_actions(self) -> None:
         path = self._settings.value("updates/last_downloaded_path", "", str)
+        version = self._settings.value("updates/last_downloaded_version", "", str)
         has_file = bool(path and Path(path).exists())
+        label = f"Install IOGraph {version}" if (has_file and version) else "Install Downloaded Update"
         action = getattr(self, "_install_downloaded_update_action", None)
         if action is not None:
+            action.setText(label)
             action.setEnabled(has_file)
         tray_action = getattr(self, "_tray_install_update_action", None)
         if tray_action is not None:
+            tray_action.setText(label)
             tray_action.setEnabled(has_file)
 
     def _open_downloaded_update(self) -> None:
