@@ -30,6 +30,7 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
           brew install create-dmg
+          brew install fileicon
 
       - name: Build app bundle
         run: |
@@ -75,16 +76,7 @@ jobs:
 
       - name: Set DMG file icon
         run: |
-          if command -v DeRez >/dev/null 2>&1 && command -v Rez >/dev/null 2>&1 && command -v SetFile >/dev/null 2>&1; then
-            TMP_RSRC="$(mktemp /tmp/dmg-icon.XXXXXX.rsrc)"
-            DeRez -only icns "packaging/assets/dmg/IOGraphVolume.icns" > "$TMP_RSRC"
-            Rez -append "$TMP_RSRC" -o "release/IOGraph-macos.dmg"
-            SetFile -a C "release/IOGraph-macos.dmg"
-            rm -f "$TMP_RSRC"
-          else
-            brew install fileicon
-            fileicon set "release/IOGraph-macos.dmg" "packaging/assets/dmg/IOGraphVolume.icns"
-          fi
+          fileicon set "release/IOGraph-macos.dmg" "packaging/assets/dmg/IOGraphVolume.icns"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
