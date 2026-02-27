@@ -4,6 +4,10 @@ import webbrowser
 from math import cos, pi
 import json
 import os
+import plistlib
+import re
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from PyQt6.QtCore import QEvent, QObject, QSettings, QSize, Qt, QThread, QTimer, QStandardPaths, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QAction, QCursor, QFont, QGuiApplication, QIcon, QImage
@@ -68,16 +72,112 @@ class ExportRenderWorker(QObject):
             self.finished.emit(False, self._path)
 
 
+class UpdateCheckWorker(QObject):
+    finished = pyqtSignal(object)  # dict result
+
+    def __init__(self, current_version: str, include_prerelease: bool) -> None:
+        super().__init__()
+        self._current_version = current_version
+        self._include_prerelease = include_prerelease
+
+    @pyqtSlot()
+    def run(self) -> None:
+        try:
+            req = Request(
+                "https://api.github.com/repos/anatolyzenkov/IOGraph/releases?per_page=20",
+                headers={"Accept": "application/vnd.github+json", "User-Agent": "IOGraph-Updater"},
+            )
+            with urlopen(req, timeout=8) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            if not isinstance(payload, list):
+                raise ValueError("Invalid updates response")
+            release = self._pick_release(payload, self._include_prerelease)
+            if release is None:
+                self.finished.emit(
+                    {"ok": True, "has_update": False, "latest_tag": "", "latest_version": "", "url": "", "error": ""}
+                )
+                return
+            tag = str(release.get("tag_name", "")).strip()
+            latest_version = self._normalize_version(tag)
+            has_update = self._is_newer(latest_version, self._normalize_version(self._current_version))
+            self.finished.emit(
+                {
+                    "ok": True,
+                    "has_update": has_update,
+                    "latest_tag": tag,
+                    "latest_version": latest_version,
+                    "url": str(release.get("html_url", "")),
+                    "error": "",
+                }
+            )
+        except (HTTPError, URLError, ValueError, TimeoutError) as exc:
+            self.finished.emit(
+                {
+                    "ok": False,
+                    "has_update": False,
+                    "latest_tag": "",
+                    "latest_version": "",
+                    "url": "",
+                    "error": str(exc),
+                }
+            )
+
+    @staticmethod
+    def _pick_release(releases: list[dict], include_prerelease: bool) -> dict | None:
+        for release in releases:
+            if not isinstance(release, dict):
+                continue
+            if release.get("draft", False):
+                continue
+            if not include_prerelease and release.get("prerelease", False):
+                continue
+            return release
+        return None
+
+    @staticmethod
+    def _normalize_version(version: str) -> str:
+        v = version.strip()
+        if v.lower().startswith("v"):
+            return v[1:]
+        return v
+
+    @classmethod
+    def _is_newer(cls, latest: str, current: str) -> bool:
+        latest_key = cls._version_key(latest)
+        current_key = cls._version_key(current)
+        if latest_key is None:
+            return False
+        if current_key is None:
+            return True
+        return latest_key > current_key
+
+    @staticmethod
+    def _version_key(version: str):
+        m = re.match(r"^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$", version)
+        if not m:
+            return None
+        major, minor, patch = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        prerelease = m.group(4)
+        if prerelease is None:
+            return (major, minor, patch, 1, ())
+        identifiers = []
+        for part in prerelease.split("."):
+            if part.isdigit():
+                identifiers.append((0, int(part)))
+            else:
+                identifiers.append((1, part))
+        return (major, minor, patch, 0, tuple(identifiers))
+
+
 class MainWindow(QMainWindow):
     MAIN_FRAME_WIDTH = 720
     PANEL_HEIGHT = 66
     _MONTH_NAMES = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
     _RESOURCE_DIR = Path(__file__).resolve().parent / "resources"
     _APP_ICON_FILES = ("icon16.png", "icon32.png", "icon64.png", "icon128.png", "icon256.png", "icon512.png")
-    _GITHUB_URL = "https://github.com/anatolyzenkov/iograph"
+    _GITHUB_URL = "https://github.com/anatolyzenkov/IOGraph"
     _FACEBOOK_URL = "https://www.facebook.com/pages/IOGraphica/317794951637"
     _WEBSITE_URL = "https://iographica.com/"
-    _APP_VERSION = os.environ.get("IOGRAPH_VERSION", "dev")
     _SESSION_STATE_FILE = "session_state.json"
     _SESSION_CHUNK_MS = 5 * 60 * 1000
 
@@ -98,8 +198,11 @@ class MainWindow(QMainWindow):
         self._preview_saved_fade_active = True
         self._export_thread: QThread | None = None
         self._export_worker: ExportRenderWorker | None = None
+        self._update_check_thread: QThread | None = None
+        self._update_check_worker: UpdateCheckWorker | None = None
         self._pending_snapshot_restore_visible = False
         self._pending_snapshot_restore_minimized = False
+        self._app_version = self._resolve_app_version()
         self._setup_auto_hide_timer = QTimer(self)
         self._setup_auto_hide_timer.setSingleShot(True)
         self._setup_auto_hide_timer.setInterval(10000)
@@ -304,6 +407,8 @@ class MainWindow(QMainWindow):
         self._position_toggle_button()
         self._set_tracking(True)
         self._sync_ui_state()
+        if self._auto_update_action.isChecked():
+            QTimer.singleShot(1200, lambda: self._check_for_updates(manual=False))
         self._status("Ready")
 
     def _setup_actions(self) -> None:
@@ -378,7 +483,7 @@ class MainWindow(QMainWindow):
         help_menu.addAction(source_action)
 
         check_updates_action = QAction("Check for Updates", self)
-        check_updates_action.triggered.connect(self._check_for_updates_placeholder)
+        check_updates_action.triggered.connect(lambda: self._check_for_updates(manual=True))
         help_menu.addAction(check_updates_action)
         self._check_updates_action = check_updates_action
 
@@ -420,7 +525,7 @@ class MainWindow(QMainWindow):
         self._tray_save_csv_action.setEnabled(False)
         more_menu.addSeparator()
         self._tray_check_updates_action = more_menu.addAction("Check for Updates")
-        self._tray_check_updates_action.triggered.connect(self._check_for_updates_placeholder)
+        self._tray_check_updates_action.triggered.connect(lambda: self._check_for_updates(manual=True))
         self._tray_auto_update_action = more_menu.addAction("Check for Updates Automatically")
         self._tray_auto_update_action.setCheckable(True)
         self._tray_auto_update_action.toggled.connect(self._on_auto_update_toggled)
@@ -1295,11 +1400,93 @@ class MainWindow(QMainWindow):
         QMessageBox.information(
             self,
             "About IOGraph",
-            f"IOGraph {self._APP_VERSION}\nTurn your routine work into contemporary art",
+            f"IOGraph {self._app_version}\nTurn your routine work into contemporary art",
         )
 
-    def _check_for_updates_placeholder(self) -> None:
-        self._status("Check for updates is not implemented yet")
+    def _resolve_app_version(self) -> str:
+        env_version = os.environ.get("IOGRAPH_VERSION", "").strip()
+        if env_version:
+            return env_version
+        app = QGuiApplication.instance()
+        if app is not None:
+            runtime_version = app.applicationVersion().strip()
+            if runtime_version:
+                return runtime_version
+        if getattr(sys, "frozen", False):
+            try:
+                exe_path = Path(sys.executable).resolve()
+                plist_path = exe_path.parent.parent / "Info.plist"
+                if plist_path.exists():
+                    payload = plistlib.loads(plist_path.read_bytes())
+                    plist_version = str(payload.get("CFBundleShortVersionString", "")).strip()
+                    if plist_version:
+                        return plist_version
+            except Exception:
+                pass
+        return "dev"
+
+    def _check_for_updates(self, manual: bool) -> None:
+        if self._update_check_thread is not None:
+            if manual:
+                self._status("Update check is already running")
+            return
+        include_prerelease = "-" in self._app_version
+        thread = QThread(self)
+        worker = UpdateCheckWorker(self._app_version, include_prerelease)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.finished.connect(lambda result, is_manual=manual: self._on_update_check_finished(is_manual, result))
+        worker.finished.connect(thread.quit)
+        worker.finished.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+        thread.finished.connect(self._on_update_check_thread_closed)
+        self._update_check_thread = thread
+        self._update_check_worker = worker
+        self._set_update_check_busy(True)
+        self._status("Checking for updates...")
+        thread.start()
+
+    def _on_update_check_finished(self, manual: bool, result: dict) -> None:
+        ok = bool(result.get("ok", False))
+        if not ok:
+            if manual:
+                QMessageBox.warning(self, "Check for Updates", f"Unable to check for updates:\n{result.get('error', '')}")
+            return
+        has_update = bool(result.get("has_update", False))
+        latest_tag = str(result.get("latest_tag", ""))
+        latest_version = str(result.get("latest_version", ""))
+        release_url = str(result.get("url", ""))
+        if not has_update:
+            if manual:
+                QMessageBox.information(self, "Check for Updates", f"You are up to date ({self._app_version}).")
+            self._status("No updates found")
+            return
+        if not manual:
+            last_prompted = self._settings.value("updates/last_prompted_version", "", str)
+            if last_prompted == latest_tag:
+                return
+            self._settings.setValue("updates/last_prompted_version", latest_tag)
+        answer = QMessageBox.question(
+            self,
+            "Update Available",
+            f"IOGraph {latest_version} is available.\n\nOpen the release page?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if answer == QMessageBox.StandardButton.Yes and release_url:
+            self._open_url(release_url)
+        self._status("Update available")
+
+    def _on_update_check_thread_closed(self) -> None:
+        self._update_check_thread = None
+        self._update_check_worker = None
+        self._set_update_check_busy(False)
+
+    def _set_update_check_busy(self, busy: bool) -> None:
+        self._check_updates_action.setEnabled(not busy)
+        tray_check = getattr(self, "_tray_check_updates_action", None)
+        if tray_check is not None:
+            tray_check.setEnabled(not busy)
 
     def _status(self, _message: str) -> None:
         # Java version has no Qt status bar; keep this as no-op to avoid affecting layout height.
