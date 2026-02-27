@@ -60,11 +60,10 @@ jobs:
           rm -rf build/dmg-root
           mkdir -p build/dmg-root
           cp -R "dist/IOGraph.app" "build/dmg-root/IOGraph.app"
-          cp "packaging/assets/dmg/IOGraphVolume.icns" "build/dmg-root/IOGraphVolume.icns"
           ditto -c -k --sequesterRsrc --keepParent dist/IOGraph.app release/IOGraph-macos.zip
           create-dmg \
             --volname "IOGraph" \
-            --volicon "build/dmg-root/IOGraphVolume.icns" \
+            --volicon "packaging/assets/dmg/IOGraphVolume.icns" \
             --window-pos 120 120 \
             --window-size 446 224 \
             --icon-size 128 \
