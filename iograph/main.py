@@ -1712,9 +1712,9 @@ class MainWindow(QMainWindow):
         self._open_installer_file(local)
 
     def _open_installer_file(self, path: Path) -> None:
-        opened = QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
-        if opened and path.suffix.lower() == ".dmg":
-            QTimer.singleShot(350, self._request_quit)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+        if path.suffix.lower() == ".dmg":
+            QTimer.singleShot(650, self._request_quit)
 
     def _status(self, _message: str) -> None:
         # Java version has no Qt status bar; keep this as no-op to avoid affecting layout height.

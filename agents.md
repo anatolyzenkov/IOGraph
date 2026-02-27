@@ -7,8 +7,8 @@ Ship IOGraph Python + PyQt as production app with stable update flow.
 - Implement changes in Python codebase (`iograph_2`) unless explicitly requested otherwise.
 - Work in small steps; run `python3 -m compileall iograph` after edits.
 - Reporting format after each step:
-  1. what was made
-  2. what remains next
+  1. What was made
+  2. What remains next
 
 ## Current branch/release policy
 - Primary dev branch: `python-port` in `anatolyzenkov/IOGraph`.
