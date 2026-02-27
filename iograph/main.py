@@ -1667,6 +1667,7 @@ class MainWindow(QMainWindow):
         )
         if prompt == QMessageBox.StandardButton.Yes:
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(local)))
+            QTimer.singleShot(350, self._request_quit)
             self._status("Update downloaded and opened")
             return
         self._status("Update downloaded")
