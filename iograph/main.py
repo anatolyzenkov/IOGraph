@@ -6,11 +6,12 @@ import json
 import os
 import plistlib
 import re
+import shutil
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from PyQt6.QtCore import QEvent, QObject, QSettings, QSize, Qt, QThread, QTimer, QStandardPaths, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QAction, QCursor, QFont, QGuiApplication, QIcon, QImage
+from PyQt6.QtCore import QEvent, QObject, QSettings, QSize, Qt, QThread, QTimer, QStandardPaths, QUrl, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import QAction, QCursor, QDesktopServices, QFont, QGuiApplication, QIcon, QImage
 from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -107,6 +108,8 @@ class UpdateCheckWorker(QObject):
                     "latest_tag": tag,
                     "latest_version": latest_version,
                     "url": str(release.get("html_url", "")),
+                    "asset_url": self._asset_value(release, "url"),
+                    "asset_name": self._asset_value(release, "name"),
                     "error": "",
                 }
             )
@@ -132,6 +135,36 @@ class UpdateCheckWorker(QObject):
             if not include_prerelease and release.get("prerelease", False):
                 continue
             return release
+        return None
+
+    @classmethod
+    def _asset_value(cls, release: dict, key: str) -> str:
+        asset = cls._pick_asset(release)
+        if asset is None:
+            return ""
+        return str(asset.get(key, "")).strip()
+
+    @staticmethod
+    def _pick_asset(release: dict) -> dict | None:
+        assets = release.get("assets", [])
+        if not isinstance(assets, list):
+            return None
+        if sys.platform == "darwin":
+            preferred_exts = (".dmg", ".zip")
+        elif sys.platform.startswith("win"):
+            preferred_exts = (".exe", ".msi", ".zip")
+        else:
+            preferred_exts = (".AppImage", ".tar.gz", ".zip")
+        for ext in preferred_exts:
+            for asset in assets:
+                if not isinstance(asset, dict):
+                    continue
+                name = str(asset.get("name", "")).lower()
+                if name.endswith(ext.lower()):
+                    return asset
+        for asset in assets:
+            if isinstance(asset, dict):
+                return asset
         return None
 
     @staticmethod
@@ -169,6 +202,38 @@ class UpdateCheckWorker(QObject):
         return (major, minor, patch, 0, tuple(identifiers))
 
 
+class UpdateDownloadWorker(QObject):
+    finished = pyqtSignal(bool, str, str)  # ok, path, error
+
+    def __init__(self, asset_url: str, target_path: str) -> None:
+        super().__init__()
+        self._asset_url = asset_url
+        self._target_path = Path(target_path)
+
+    @pyqtSlot()
+    def run(self) -> None:
+        tmp_path = self._target_path.with_suffix(self._target_path.suffix + ".part")
+        try:
+            req = Request(
+                self._asset_url,
+                headers={
+                    "Accept": "application/octet-stream",
+                    "User-Agent": "IOGraph-Updater",
+                },
+            )
+            with urlopen(req, timeout=30) as response, tmp_path.open("wb") as out:
+                shutil.copyfileobj(response, out)
+            tmp_path.replace(self._target_path)
+            self.finished.emit(True, str(self._target_path), "")
+        except Exception as exc:
+            try:
+                if tmp_path.exists():
+                    tmp_path.unlink()
+            except Exception:
+                pass
+            self.finished.emit(False, str(self._target_path), str(exc))
+
+
 class MainWindow(QMainWindow):
     MAIN_FRAME_WIDTH = 720
     PANEL_HEIGHT = 66
@@ -180,6 +245,7 @@ class MainWindow(QMainWindow):
     _WEBSITE_URL = "https://iographica.com/"
     _SESSION_STATE_FILE = "session_state.json"
     _SESSION_CHUNK_MS = 5 * 60 * 1000
+    _VERSION_FILE = Path(__file__).resolve().parent.parent / "VERSION"
 
     def __init__(self) -> None:
         super().__init__()
@@ -200,6 +266,8 @@ class MainWindow(QMainWindow):
         self._export_worker: ExportRenderWorker | None = None
         self._update_check_thread: QThread | None = None
         self._update_check_worker: UpdateCheckWorker | None = None
+        self._update_download_thread: QThread | None = None
+        self._update_download_worker = None
         self._pending_snapshot_restore_visible = False
         self._pending_snapshot_restore_minimized = False
         self._app_version = self._resolve_app_version()
@@ -1407,11 +1475,6 @@ class MainWindow(QMainWindow):
         env_version = os.environ.get("IOGRAPH_VERSION", "").strip()
         if env_version:
             return env_version
-        app = QGuiApplication.instance()
-        if app is not None:
-            runtime_version = app.applicationVersion().strip()
-            if runtime_version:
-                return runtime_version
         if getattr(sys, "frozen", False):
             try:
                 exe_path = Path(sys.executable).resolve()
@@ -1423,6 +1486,13 @@ class MainWindow(QMainWindow):
                         return plist_version
             except Exception:
                 pass
+        try:
+            if self._VERSION_FILE.exists():
+                file_version = self._VERSION_FILE.read_text(encoding="utf-8").strip()
+                if file_version:
+                    return file_version
+        except Exception:
+            pass
         return "dev"
 
     def _check_for_updates(self, manual: bool) -> None:
@@ -1456,6 +1526,8 @@ class MainWindow(QMainWindow):
         latest_tag = str(result.get("latest_tag", ""))
         latest_version = str(result.get("latest_version", ""))
         release_url = str(result.get("url", ""))
+        asset_url = str(result.get("asset_url", ""))
+        asset_name = str(result.get("asset_name", ""))
         if not has_update:
             if manual:
                 QMessageBox.information(self, "Check for Updates", f"You are up to date ({self._app_version}).")
@@ -1466,20 +1538,80 @@ class MainWindow(QMainWindow):
             if last_prompted == latest_tag:
                 return
             self._settings.setValue("updates/last_prompted_version", latest_tag)
-        answer = QMessageBox.question(
-            self,
-            "Update Available",
-            f"IOGraph {latest_version} is available.\n\nOpen the release page?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.Yes,
-        )
-        if answer == QMessageBox.StandardButton.Yes and release_url:
-            self._open_url(release_url)
+        if self._update_download_thread is not None:
+            return
+        if manual:
+            buttons = QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            answer = QMessageBox.question(
+                self,
+                "Update Available",
+                f"IOGraph {latest_version} is available.\n\nDownload now?",
+                buttons,
+                QMessageBox.StandardButton.Yes,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                if release_url:
+                    self._open_url(release_url)
+                return
+        if not asset_url or not asset_name:
+            if manual and release_url:
+                self._open_url(release_url)
+            return
+        self._start_update_download(latest_version, asset_url, asset_name)
         self._status("Update available")
 
     def _on_update_check_thread_closed(self) -> None:
         self._update_check_thread = None
         self._update_check_worker = None
+        self._set_update_check_busy(False)
+
+    def _start_update_download(self, latest_version: str, asset_url: str, asset_name: str) -> None:
+        if self._update_download_thread is not None:
+            return
+        target = self._update_target_path(asset_name, latest_version)
+        thread = QThread(self)
+        worker = UpdateDownloadWorker(asset_url, str(target))
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.finished.connect(lambda ok, path, err: self._on_update_download_finished(ok, path, err, latest_version))
+        worker.finished.connect(thread.quit)
+        worker.finished.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+        thread.finished.connect(self._on_update_download_thread_closed)
+        self._update_download_thread = thread
+        self._update_download_worker = worker
+        self._set_update_check_busy(True)
+        self._status("Downloading update...")
+        thread.start()
+
+    def _update_target_path(self, asset_name: str, latest_version: str) -> Path:
+        downloads = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DownloadLocation)
+        target_dir = Path(downloads) if downloads else (Path.home() / "Downloads")
+        target_dir.mkdir(parents=True, exist_ok=True)
+        base = target_dir / asset_name
+        if not base.exists():
+            return base
+        stem, suffix = base.stem, base.suffix
+        return target_dir / f"{stem}-{latest_version}{suffix}"
+
+    def _on_update_download_finished(self, ok: bool, path: str, error: str, latest_version: str) -> None:
+        if not ok:
+            QMessageBox.warning(self, "Update Download", f"Failed to download IOGraph {latest_version}:\n{error}")
+            return
+        local = Path(path)
+        answer = QMessageBox.question(
+            self,
+            "Update Downloaded",
+            f"IOGraph {latest_version} downloaded to:\n{local}\n\nOpen it now?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if answer == QMessageBox.StandardButton.Yes:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(local)))
+
+    def _on_update_download_thread_closed(self) -> None:
+        self._update_download_thread = None
+        self._update_download_worker = None
         self._set_update_check_busy(False)
 
     def _set_update_check_busy(self, busy: bool) -> None:
