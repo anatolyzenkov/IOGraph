@@ -1,77 +1,72 @@
 # Project instructions
 
 ## Goal
-Maintain and evolve IOGraph Python + PyQt implementation.
-Behavior parity with Java is still important, but Java is now legacy reference.
+Ship IOGraph Python + PyQt as production app with stable update flow.
 
 ## Rules
-- New features and fixes are implemented in Python codebase unless explicitly requested otherwise.
+- Implement changes in Python codebase (`iograph_2`) unless explicitly requested otherwise.
 - Work in small steps; run `python3 -m compileall iograph` after edits.
+- Reporting format after each step:
+  1. what was made
+  2. what remains next
 
-## Reporting
-After each step:
-1. what was made
-2. what remains next
+## Current branch/release policy
+- Primary dev branch: `python-port` in `anatolyzenkov/IOGraph`.
+- Java legacy baseline tag is preserved: `java-v1.0.3`.
+- Until signing/notarization and Windows pipeline are ready:
+  - publish only `beta` / `rc`
+  - do not publish stable `v2.0.0`.
 
-## Build And Release (macOS first)
-### Goal
-- Produce reproducible desktop builds for macOS (first) and Windows (later).
-- Publish builds automatically to GitHub Releases.
-- Support update checks and optional automatic updates from GitHub-hosted release metadata.
+## Build/CI status (actual)
+- GitHub Actions:
+  - `Python CI` on `python-port` (compile checks).
+  - `Release macOS` on tag `v*`.
+- macOS artifacts:
+  - `IOGraph-macos.zip`
+  - `IOGraph-macos.dmg` with configured layout.
+- Packaging asset path:
+  - `packaging/assets/dmg/IOGraphVolume.icns`.
 
-### Packaging
-- Use `PyInstaller` for application packaging.
-- macOS output target:
-  - `IOGraph.app`
-  - distributable archive (`.dmg` or `.zip`)
-- Keep all runtime assets in `iograph/resources` and include them in packaging config. 
+## Version source
+- App version resolution order:
+  1. `IOGRAPH_VERSION` env
+  2. bundled `Info.plist` (`CFBundleShortVersionString`) for frozen app
+  3. repo `VERSION` file for local source runs
+  4. fallback `dev`.
 
-### Versioning
-- Use semantic version tags: `vX.Y.Z`.
-- Only tagged commits trigger production release pipeline.
-- App version in code and release tag must match.
+## Update flow (as implemented now)
+- Update source: GitHub Releases API (`anatolyzenkov/IOGraph`).
+- Manual check:
+  - menu/tray `Check for Updates`
+  - asks `Download now?`
+  - if yes: downloads asset (`.dmg/.zip` on macOS) and prompts `Install now?`
+  - if no: just closes dialog.
+- Auto update:
+  - controlled by `options/automatic_update` (default `True`)
+  - checks once on startup (~1.2s delay) and then every 6 hours
+  - quiet mode (no noisy notifications)
+  - downloads to fixed path:
+    - `~/Library/Application Support/IOGraph/updates/<asset_name>`
+  - keeps one rolling file per asset name
+  - after download prompts install; if install is opened, app closes automatically.
+- Install action:
+  - dynamic menu/tray item:
+    - `Install IOGraph <version>` when downloaded file exists
+    - fallback label `Install Downloaded Update`.
+- Stored update keys in `QSettings`:
+  - `updates/last_downloaded_path`
+  - `updates/last_downloaded_version`
+  - `updates/last_auto_downloaded_version`
+  - `updates/last_prompted_version`.
+- Cleanup:
+  - on startup, if current app version is already >= downloaded version, old downloaded update artifacts are removed.
 
-### CI/CD (GitHub Actions)
-- Pipeline trigger: push tag `v*`.
-- Steps:
-  1. create clean env
-  2. install deps
-  3. build app with `PyInstaller`
-  4. sign app (`codesign`)
-  5. notarize app (Apple notary)
-  6. staple notarization
-  7. package artifact (`.dmg`/`.zip`)
-  8. publish artifact to GitHub Release
-  9. update and publish update feed metadata (appcast/manifest)
-
-### Secrets/Signing (macOS)
-- Configure GitHub secrets for:
-  - Apple Developer certificate and password
-  - Keychain/import password
-  - Apple notarization credentials (API key or app-specific)
-- Never store signing material in repo.
-
-### Auto-Update Strategy
-- Source of updates: GitHub Releases metadata feed (appcast/manifest).
-- App behavior:
-  - manual check command: always available
-  - automatic check/update: controlled by user setting (`automatic_update`)
-- Persist setting with `QSettings`.
-- If auto-update is ON: check on startup (and optionally on interval).
-
-### Windows (later)
-- Keep same release model (GitHub Releases + metadata feed).
-- Introduce Windows updater path (e.g. WinSparkle or equivalent) when Windows packaging is started.
-
-### Implementation Rule
-- Do not implement ad-hoc updater logic that bypasses signed release artifacts.
-- Keep update pipeline deterministic and CI-driven; local manual releases are fallback only.
-
-## Git / Rollout Plan
-- Keep migration in the same repository (`anatolyzenkov/IOGraph`).
-- Preserve Java history as legacy baseline and mark last Java release with tag `java-v1.0.3`.
-- Push current Python work to branch `python-port` first; continue development there until CI packaging is ready.
-- Before packaging automation exists, publish only pre-releases/beta builds (no stable release).
-- Switch default branch/release line to Python only after build/update pipeline is working and validated.
-- Archive Java code in-place (`legacy/java/`) only when explicitly scheduled; do not delete Java immediately.
+## Update flow target (next)
+- Add signed + notarized macOS release pipeline.
+- Replace DMG-assisted install with real updater helper flow:
+  1. download
+  2. close app
+  3. replace app in `/Applications`
+  4. relaunch.
+- Add Windows build + installer pipeline and align update UX cross-platform.
     

@@ -1666,8 +1666,7 @@ class MainWindow(QMainWindow):
             QMessageBox.StandardButton.Yes,
         )
         if prompt == QMessageBox.StandardButton.Yes:
-            QDesktopServices.openUrl(QUrl.fromLocalFile(str(local)))
-            QTimer.singleShot(350, self._request_quit)
+            self._open_installer_file(local)
             self._status("Update downloaded and opened")
             return
         self._status("Update downloaded")
@@ -1710,7 +1709,12 @@ class MainWindow(QMainWindow):
             self._update_install_update_actions()
             QMessageBox.information(self, "Install Downloaded Update", "Downloaded update file no longer exists.")
             return
-        QDesktopServices.openUrl(QUrl.fromLocalFile(str(local)))
+        self._open_installer_file(local)
+
+    def _open_installer_file(self, path: Path) -> None:
+        opened = QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+        if opened and path.suffix.lower() == ".dmg":
+            QTimer.singleShot(350, self._request_quit)
 
     def _status(self, _message: str) -> None:
         # Java version has no Qt status bar; keep this as no-op to avoid affecting layout height.
