@@ -7,6 +7,7 @@ import os
 import plistlib
 import re
 import shutil
+import subprocess
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -1366,6 +1367,8 @@ class MainWindow(QMainWindow):
         self._refresh_dpi_dependent_icons()
 
     def _tray_icon_name(self, tracking: bool) -> str:
+        if sys.platform.startswith("win"):
+            return "icon32.png"
         if sys.platform == "darwin":
             name = "MacOSTrayIconPause.png" if tracking else "MacOSTrayIconRecord.png"
             if (self._RESOURCE_DIR / name).exists():
@@ -1668,10 +1671,17 @@ class MainWindow(QMainWindow):
                 self._settings.remove("updates/last_auto_downloaded_version")
         if self._is_latest_update_already_downloaded(latest_tag):
             if manual:
+                downloaded_path = self._pending_downloaded_update_path()
+                zip_update = self._is_zip_update(downloaded_path)
+                message = (
+                    "New version of IOGraph is already downloaded.\n\nOpen downloaded update zip?"
+                    if zip_update
+                    else "New version of IOGraph is already downloaded.\n\nClose and install now?"
+                )
                 answer = QMessageBox.question(
                     self,
                     "Update Ready",
-                    "New version of IOGraph is already downloaded.\n\nClose and install now?",
+                    message,
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.Yes,
                 )
@@ -1755,17 +1765,23 @@ class MainWindow(QMainWindow):
         if not manual:
             self._settings.setValue("updates/last_auto_downloaded_version", tagged_version)
             self._settings.setValue("updates/last_prompted_version", tagged_version)
+        is_zip = self._is_zip_update(local)
+        prompt_message = (
+            "New version of IOGraph is downloaded.\n\nOpen downloaded update zip?"
+            if is_zip
+            else "New version of IOGraph is ready to install.\n\nClose and install now?"
+        )
         prompt = QMessageBox.question(
             self,
             "Update Ready",
-            "New version of IOGraph is ready to install.\n\nClose and install now?",
+            prompt_message,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.Yes,
         )
         if prompt == QMessageBox.StandardButton.Yes:
             self._settings.setValue("updates/install_ignore_count", 0)
-            self._open_installer_file(local)
-            self._status("Update downloaded and opened")
+            self._open_update_artifact(local)
+            self._status("Update downloaded")
             return
         ignored = int(self._settings.value("updates/install_ignore_count", 0, int)) + 1
         self._settings.setValue("updates/install_ignore_count", ignored)
@@ -1786,7 +1802,11 @@ class MainWindow(QMainWindow):
 
     def _update_install_update_actions(self) -> None:
         has_file = self._has_pending_downloaded_update()
-        label = "Update now"
+        downloaded = self._pending_downloaded_update_path()
+        if self._is_zip_update(downloaded):
+            label = "Open update zip"
+        else:
+            label = "Update now"
         action = getattr(self, "_install_downloaded_update_action", None)
         if action is not None:
             action.setText(label)
@@ -1804,6 +1824,17 @@ class MainWindow(QMainWindow):
     def _has_pending_downloaded_update(self) -> bool:
         path = self._settings.value("updates/last_downloaded_path", "", str)
         return bool(path and Path(path).exists())
+
+    def _pending_downloaded_update_path(self) -> Path | None:
+        path = self._settings.value("updates/last_downloaded_path", "", str)
+        if not path:
+            return None
+        p = Path(path)
+        return p if p.exists() else None
+
+    @staticmethod
+    def _is_zip_update(path: Path | None) -> bool:
+        return path is not None and path.suffix.lower() == ".zip"
 
     def _is_latest_update_already_downloaded(self, latest_tag: str) -> bool:
         downloaded_tag = str(self._settings.value("updates/last_downloaded_version", "", str)).strip()
@@ -1834,9 +1865,15 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Install Downloaded Update", "Downloaded update file no longer exists.")
             return
         self._settings.setValue("updates/install_ignore_count", 0)
-        self._open_installer_file(local)
+        self._open_update_artifact(local)
 
-    def _open_installer_file(self, path: Path) -> None:
+    def _open_update_artifact(self, path: Path) -> None:
+        if self._is_zip_update(path) and sys.platform.startswith("win"):
+            try:
+                subprocess.Popen(["explorer.exe", "/select,", str(path)])
+            except Exception:
+                QDesktopServices.openUrl(QUrl.fromLocalFile(str(path.parent)))
+            return
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
         if path.suffix.lower() == ".dmg":
             QTimer.singleShot(650, self._request_quit)
