@@ -1751,7 +1751,7 @@ class MainWindow(QMainWindow):
         target_dir = self._updates_cache_dir()
         target_dir.mkdir(parents=True, exist_ok=True)
         # Auto-update keeps a single rolling artifact file per platform asset.
-        return target_dir / asset_name
+        return target_dir / self._auto_update_cache_name(asset_name)
 
     def _updates_cache_dir(self) -> Path:
         appdata = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppLocalDataLocation)
@@ -1760,6 +1760,17 @@ class MainWindow(QMainWindow):
         if appdata:
             return Path(appdata) / "updates"
         return Path.home() / ".iograph" / "updates"
+
+    @staticmethod
+    def _auto_update_cache_name(asset_name: str) -> str:
+        suffix = Path(asset_name).suffix.lower()
+        if not suffix:
+            suffix = ".bin"
+        if sys.platform.startswith("win"):
+            return f"IOGraph-windows-latest{suffix}"
+        if sys.platform == "darwin":
+            return f"IOGraph-macos-latest{suffix}"
+        return f"IOGraph-linux-latest{suffix}"
 
     def _on_update_download_finished(self, ok: bool, path: str, error: str, latest_version: str, manual: bool) -> None:
         if not ok:

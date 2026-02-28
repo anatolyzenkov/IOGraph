@@ -61,7 +61,7 @@ jobs:
           rm -rf build/dmg-root
           mkdir -p build/dmg-root
           cp -R "dist/IOGraph.app" "build/dmg-root/IOGraph.app"
-          ditto -c -k --sequesterRsrc --keepParent dist/IOGraph.app release/IOGraph-macos.zip
+          ditto -c -k --sequesterRsrc --keepParent dist/IOGraph.app "release/IOGraph-macos-${IOGRAPH_VERSION}.zip"
           create-dmg \
             --volname "IOGraph" \
             --volicon "packaging/assets/dmg/IOGraphVolume.icns" \
@@ -71,26 +71,26 @@ jobs:
             --icon "IOGraph.app" 50 24 \
             --app-drop-link 260 24 \
             --format UDBZ \
-            "release/IOGraph-macos.dmg" \
+            "release/IOGraph-macos-${IOGRAPH_VERSION}.dmg" \
             "build/dmg-root"
 
       - name: Set DMG file icon
         run: |
-          fileicon set "release/IOGraph-macos.dmg" "packaging/assets/dmg/IOGraphVolume.icns"
+          fileicon set "release/IOGraph-macos-${IOGRAPH_VERSION}.dmg" "packaging/assets/dmg/IOGraphVolume.icns"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: IOGraph-macos
           path: |
-            release/IOGraph-macos.zip
-            release/IOGraph-macos.dmg
+            release/IOGraph-macos-*.zip
+            release/IOGraph-macos-*.dmg
 
       - name: Publish GitHub Release asset
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release/IOGraph-macos.zip
-            release/IOGraph-macos.dmg
+            release/IOGraph-macos-*.zip
+            release/IOGraph-macos-*.dmg
           prerelease: ${{ contains(github.ref_name, '-') }}

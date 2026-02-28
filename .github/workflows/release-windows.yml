@@ -45,18 +45,19 @@ jobs:
         shell: powershell
         run: |
           New-Item -ItemType Directory -Path release -Force | Out-Null
-          if (Test-Path "release/IOGraph-windows.zip") { Remove-Item "release/IOGraph-windows.zip" -Force }
-          Compress-Archive -Path "dist/IOGraph/*" -DestinationPath "release/IOGraph-windows.zip"
+          $artifact = "release/IOGraph-windows-${env:IOGRAPH_VERSION}.zip"
+          if (Test-Path $artifact) { Remove-Item $artifact -Force }
+          Compress-Archive -Path "dist/IOGraph/*" -DestinationPath $artifact
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: IOGraph-windows
-          path: release/IOGraph-windows.zip
+          path: release/IOGraph-windows-*.zip
 
       - name: Publish GitHub Release asset
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: release/IOGraph-windows.zip
+          files: release/IOGraph-windows-*.zip
           prerelease: ${{ contains(github.ref_name, '-') }}
