@@ -134,6 +134,9 @@ class UpdateCheckWorker(QObject):
                 continue
             if not include_prerelease and release.get("prerelease", False):
                 continue
+            if UpdateCheckWorker._pick_asset(release) is None:
+                # Ignore releases that do not provide an installer for this platform.
+                continue
             return release
         return None
 
@@ -149,21 +152,43 @@ class UpdateCheckWorker(QObject):
         assets = release.get("assets", [])
         if not isinstance(assets, list):
             return None
+
         if sys.platform == "darwin":
-            preferred_exts = (".dmg", ".zip")
-        elif sys.platform.startswith("win"):
-            preferred_exts = (".exe", ".msi", ".zip")
-        else:
-            preferred_exts = (".AppImage", ".tar.gz", ".zip")
-        for ext in preferred_exts:
             for asset in assets:
                 if not isinstance(asset, dict):
                     continue
                 name = str(asset.get("name", "")).lower()
-                if name.endswith(ext.lower()):
+                if name.endswith(".dmg"):
                     return asset
+            for asset in assets:
+                if not isinstance(asset, dict):
+                    continue
+                name = str(asset.get("name", "")).lower()
+                if name.endswith(".zip") and any(token in name for token in ("mac", "macos", "osx", "darwin")):
+                    return asset
+            return None
+
+        if sys.platform.startswith("win"):
+            for asset in assets:
+                if not isinstance(asset, dict):
+                    continue
+                name = str(asset.get("name", "")).lower()
+                if name.endswith(".exe") or name.endswith(".msi"):
+                    return asset
+            for asset in assets:
+                if not isinstance(asset, dict):
+                    continue
+                name = str(asset.get("name", "")).lower()
+                if name.endswith(".zip") and any(token in name for token in ("windows", "win")):
+                    return asset
+            return None
+
+        # Linux/other: use explicit Linux artifacts only.
         for asset in assets:
-            if isinstance(asset, dict):
+            if not isinstance(asset, dict):
+                continue
+            name = str(asset.get("name", "")).lower()
+            if name.endswith(".appimage") or name.endswith(".deb") or name.endswith(".rpm") or name.endswith(".tar.gz"):
                 return asset
         return None
 
@@ -347,7 +372,8 @@ class MainWindow(QMainWindow):
         front_layout.addLayout(top_row)
 
         self._total_time_label = QLabel("Total Time", self._front_panel)
-        self._total_time_label.setFont(QFont(self._total_time_label.font().family(), 30))
+        total_time_font_size = 24 if sys.platform.startswith("win") else 30
+        self._total_time_label.setFont(QFont(self._total_time_label.font().family(), total_time_font_size))
         self._total_time_label.setFixedHeight(36)
         self._total_time_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self._total_time_label.setVisible(False)
@@ -369,7 +395,8 @@ class MainWindow(QMainWindow):
         top_row.addStretch(1)
 
         self._period_label = QLabel("Time Period", self._front_panel)
-        self._period_label.setFont(QFont(self._period_label.font().family(), 12))
+        period_font_size = 10 if sys.platform.startswith("win") else 12
+        self._period_label.setFont(QFont(self._period_label.font().family(), period_font_size))
         self._period_label.setFixedHeight(16)
         self._period_label.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
         self._period_label.setVisible(False)
@@ -617,7 +644,8 @@ class MainWindow(QMainWindow):
         more_menu.addSeparator()
         more_menu.addAction("About IOGraph", self._show_about_dialog)
         tray_menu.addSeparator()
-        tray_menu.addAction("Quit", self._request_quit)
+        tray_exit_label = "Exit" if sys.platform.startswith("win") else "Quit"
+        tray_menu.addAction(tray_exit_label, self._request_quit)
         self._tray_icon.setContextMenu(tray_menu)
         self._tray_icon.activated.connect(self._on_tray_activated)
         self._tray_icon.show()

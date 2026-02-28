@@ -9,6 +9,7 @@ on:
       - "requirements.txt"
       - ".github/workflows/ci-python.yml"
       - ".github/workflows/release-macos.yml"
+      - ".github/workflows/release-windows.yml"
   pull_request:
     branches:
       - python-port
@@ -17,6 +18,7 @@ on:
       - "requirements.txt"
       - ".github/workflows/ci-python.yml"
       - ".github/workflows/release-macos.yml"
+      - ".github/workflows/release-windows.yml"
 
 concurrency:
   group: ci-python-${{ github.ref }}

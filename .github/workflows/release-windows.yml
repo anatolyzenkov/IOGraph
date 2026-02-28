@@ -1,0 +1,75 @@
+name: Release Windows
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    env:
+      IOGRAPH_VERSION: ${{ github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller pillow
+
+      - name: Build Windows app
+        run: |
+          pyinstaller --noconfirm --windowed --name IOGraph --icon iograph/resources/icon256.png --add-data "iograph/resources;iograph/resources" --collect-all PyQt6 run_iograph.py
+
+      - name: Prepare artifact
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Path release -Force | Out-Null
+          if (Test-Path "release/IOGraph-windows.zip") { Remove-Item "release/IOGraph-windows.zip" -Force }
+          Compress-Archive -Path "dist/IOGraph/*" -DestinationPath "release/IOGraph-windows.zip"
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer
+        shell: powershell
+        run: |
+          $version = "${env:IOGRAPH_VERSION}"
+          if ($version.StartsWith("v")) { $version = $version.Substring(1) }
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
+            "/DAppVersion=$version" `
+            "/DSourceDir=$pwd\dist\IOGraph" `
+            "/DOutputDir=$pwd\release" `
+            "/DOutputBaseFilename=IOGraph-windows-setup" `
+            "packaging\windows\IOGraph.iss"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: IOGraph-windows
+          path: |
+            release/IOGraph-windows.zip
+            release/IOGraph-windows-setup.exe
+
+      - name: Publish GitHub Release asset
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/IOGraph-windows.zip
+            release/IOGraph-windows-setup.exe
+          prerelease: ${{ contains(github.ref_name, '-') }}
