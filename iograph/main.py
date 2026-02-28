@@ -1379,6 +1379,8 @@ class MainWindow(QMainWindow):
 
     def _tray_state_icon(self, tracking: bool) -> QIcon:
         icon = QIcon(str(self._resource_file_for_dpi(self._tray_icon_name(tracking))))
+        if sys.platform.startswith("win"):
+            return icon
         if self._should_show_update_badge():
             size = icon.actualSize(QSize(22, 22))
             pm = icon.pixmap(size)
