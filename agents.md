@@ -16,6 +16,19 @@ Ship IOGraph Python + PyQt as production app with stable update flow.
 - Until signing/notarization and Windows pipeline are ready:
   - publish only `beta` / `rc`
   - do not publish stable `v2.0.0`.
+- Windows code-signing is postponed for now (test phase).
+- Keep Windows installer flow in RC, but treat SmartScreen bypass as a temporary testing procedure.
+- Pre-release tag naming (required):
+  - use zero-padded numeric suffixes for correct GitHub ordering.
+  - examples: `v2.0.0-rc.011`, `v2.0.0-rc.012`, `v2.0.0-beta.001`.
+  - legacy non-padded tags remain as-is; all new tags must be padded.
+
+## Release notes policy (Windows test builds)
+- For every Windows `beta`/`rc` release, include a short SmartScreen bypass section:
+  1. Right click installer -> `Properties` -> `Unblock` -> `Apply`.
+  2. If SmartScreen blocks: `More info` -> `Run anyway`.
+  3. Optional PowerShell: `Unblock-File "<path-to-installer>"`.
+- Mark this as temporary until code-signing is enabled.
 
 ## Build/CI status (actual)
 - GitHub Actions:
