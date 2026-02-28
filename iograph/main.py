@@ -281,6 +281,11 @@ class MainWindow(QMainWindow):
     _WEBSITE_URL = "https://anatolyzenkov.com/iographica?utm_source=iograph&utm_medium=desktop&utm_campaign=iograph_website"
     _GITHUB_URL = "https://github.com/anatolyzenkov/IOGraph"
     _DONATE_URL = "https://donate.stripe.com/7sY9AUcjj7W26nq7Rj67S02"
+    _DONATE_UTM_SOURCE = "iograph"
+    _DONATE_UTM_MEDIUM = "desktop_app"
+    _DONATE_UTM_CAMPAIGN = "donate"
+    _PROMPT_FIRST_IMAGE_SAVE_KEY = "donate_prompt/first_image_saved_shown"
+    _PROMPT_FIRST_RAW_SAVE_KEY = "donate_prompt/first_raw_saved_shown"
     _SESSION_STATE_FILE = "session_state.json"
     _SESSION_CHUNK_MS = 5 * 60 * 1000
     _VERSION_FILE = Path(__file__).resolve().parent.parent / "VERSION"
@@ -494,7 +499,7 @@ class MainWindow(QMainWindow):
         self._url_btn.setIcon(self._heart_icon("HeartBtn.png"))
         self._url_btn.pressed.connect(self._on_url_pressed)
         self._url_btn.released.connect(self._on_url_released)
-        self._url_btn.clicked.connect(lambda: webbrowser.open("https://donate.stripe.com/7sY9AUcjj7W26nq7Rj67S02"))
+        self._url_btn.clicked.connect(lambda: self._open_support_url("main_support_button"))
         secondary_layout.addWidget(self._url_btn)
         bottom_layout.addWidget(self._secondary_panel, stretch=0)
 
@@ -619,7 +624,7 @@ class MainWindow(QMainWindow):
         source_action.triggered.connect(lambda: self._open_url(self._GITHUB_URL))
         help_menu.addAction(source_action)
         donate_action = QAction("Support IOGraphica", self)
-        donate_action.triggered.connect(lambda: self._open_url(self._DONATE_URL))
+        donate_action.triggered.connect(lambda: self._open_support_url("help_menu_support"))
         help_menu.addAction(donate_action)
 
     def _setup_tray(self) -> None:
@@ -651,7 +656,7 @@ class MainWindow(QMainWindow):
         more_menu.addAction("About IOGraphica", lambda: self._open_url(self._ABOUT_IOGRAPHICA_URL))
         more_menu.addAction("IOGraph Website", lambda: self._open_url(self._WEBSITE_URL))
         more_menu.addAction("Get Source Code", lambda: self._open_url(self._GITHUB_URL))
-        more_menu.addAction("Support IOGraphica", lambda: self._open_url(self._DONATE_URL))
+        more_menu.addAction("Support IOGraphica", lambda: self._open_support_url("tray_menu_support"))
         more_menu.addSeparator()
         self._tray_check_updates_action = more_menu.addAction("Check for Updates")
         self._tray_check_updates_action.triggered.connect(lambda: self._check_for_updates(manual=True))
@@ -749,6 +754,7 @@ class MainWindow(QMainWindow):
         self._remember_save_dir(csv_path.parent)
         csv_path.write_text(self._canvas.export_csv_text(), encoding="utf-8")
         self._status("CSV saved")
+        self._maybe_prompt_support_after_first_raw_save()
         self._sync_ui_state()
 
     def _start_export_worker(self, path: str) -> None:
@@ -774,7 +780,44 @@ class MainWindow(QMainWindow):
 
     def _on_export_finished(self, ok: bool, _path: str) -> None:
         self._status("Image saved" if ok else "Failed to save image")
+        if ok:
+            self._maybe_prompt_support_after_first_image_save()
         self._sync_ui_state()
+
+    def _maybe_prompt_support_after_first_image_save(self) -> None:
+        self._maybe_prompt_support(
+            key=self._PROMPT_FIRST_IMAGE_SAVE_KEY,
+            title="First Graphic Saved",
+            text="Done - your first IOGraph is saved.",
+            informative_text="Thanks for using IOGraph. If you'd like to support the project, I'd really appreciate it.",
+            source="first_image_saved_popup",
+        )
+
+    def _maybe_prompt_support_after_first_raw_save(self) -> None:
+        self._maybe_prompt_support(
+            key=self._PROMPT_FIRST_RAW_SAVE_KEY,
+            title="RAW Data Saved",
+            text="Your RAW data is saved.",
+            informative_text="If IOGraph is helpful to you, you can support its continued development.",
+            source="first_raw_saved_popup",
+        )
+
+    def _maybe_prompt_support(self, key: str, title: str, text: str, informative_text: str, source: str) -> None:
+        if self._settings.value(key, False, bool):
+            return
+        self._persist_option(key, True)
+
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Information)
+        box.setWindowTitle(title)
+        box.setText(text)
+        box.setInformativeText(informative_text)
+        box.addButton("Maybe later", QMessageBox.ButtonRole.RejectRole)
+        support_btn = box.addButton("Support the project", QMessageBox.ButtonRole.AcceptRole)
+        box.setDefaultButton(support_btn)
+        box.exec()
+        if box.clickedButton() == support_btn:
+            self._open_support_url(source)
 
     def _on_export_thread_closed(self) -> None:
         self._export_thread = None
@@ -1584,6 +1627,18 @@ class MainWindow(QMainWindow):
 
     def _open_url(self, url: str) -> None:
         webbrowser.open(self._append_utm_term(url))
+
+    def _open_support_url(self, source: str) -> None:
+        self._open_url(self._build_donate_url(source))
+
+    def _build_donate_url(self, source: str) -> str:
+        parts = urlsplit(self._DONATE_URL)
+        params = dict(parse_qsl(parts.query, keep_blank_values=True))
+        params["utm_source"] = self._DONATE_UTM_SOURCE
+        params["utm_medium"] = self._DONATE_UTM_MEDIUM
+        params["utm_campaign"] = self._DONATE_UTM_CAMPAIGN
+        params["utm_content"] = source
+        return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(params), parts.fragment))
 
     def _append_utm_term(self, url: str) -> str:
         try:
