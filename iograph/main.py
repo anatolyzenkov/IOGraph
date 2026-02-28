@@ -11,7 +11,7 @@ import subprocess
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from PyQt6.QtCore import QEvent, QObject, QSettings, QSize, Qt, QThread, QTimer, QStandardPaths, QUrl, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QEvent, QLockFile, QObject, QSettings, QSize, Qt, QThread, QTimer, QStandardPaths, QUrl, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QAction, QColor, QCursor, QDesktopServices, QFont, QGuiApplication, QIcon, QImage, QPainter
 from PyQt6.QtWidgets import (
     QApplication,
@@ -32,6 +32,8 @@ from PyQt6.QtWidgets import (
 import sys
 
 from .tracker import TrackCanvas
+
+_windows_single_instance_lock: QLockFile | None = None
 
 
 class PreviewRenderWorker(QObject):
@@ -1992,6 +1994,19 @@ def main() -> None:
     if sys.platform.startswith("win"):
         QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
     app = QApplication(sys.argv)
+    if sys.platform.startswith("win"):
+        global _windows_single_instance_lock
+        lock_root = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppLocalDataLocation)
+        if not lock_root:
+            lock_root = str(Path.home() / ".iograph")
+        lock_dir = Path(lock_root)
+        lock_dir.mkdir(parents=True, exist_ok=True)
+        lock = QLockFile(str(lock_dir / "iograph-single-instance.lock"))
+        lock.setStaleLockTime(0)
+        if not lock.tryLock(0):
+            QMessageBox.information(None, "IOGraph", "IOGraph is already running.")
+            return
+        _windows_single_instance_lock = lock
     window = MainWindow()
     window.show()
     sys.exit(app.exec())
