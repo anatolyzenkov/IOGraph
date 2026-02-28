@@ -1569,6 +1569,19 @@ class MainWindow(QMainWindow):
                         return plist_version
             except Exception:
                 pass
+            try:
+                version_candidates = []
+                meipass = getattr(sys, "_MEIPASS", "")
+                if meipass:
+                    version_candidates.append(Path(meipass) / "VERSION")
+                version_candidates.append(Path(sys.executable).resolve().parent / "VERSION")
+                for version_path in version_candidates:
+                    if version_path.exists():
+                        file_version = version_path.read_text(encoding="utf-8").strip()
+                        if file_version:
+                            return file_version
+            except Exception:
+                pass
         try:
             if self._VERSION_FILE.exists():
                 file_version = self._VERSION_FILE.read_text(encoding="utf-8").strip()

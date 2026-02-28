@@ -32,7 +32,7 @@ jobs:
 
       - name: Build Windows app
         run: |
-          pyinstaller --noconfirm --windowed --name IOGraph --icon iograph/resources/icon256.png --add-data "iograph/resources;iograph/resources" --collect-all PyQt6 run_iograph.py
+          pyinstaller --noconfirm --windowed --name IOGraph --icon iograph/resources/icon256.png --add-data "iograph/resources;iograph/resources" --add-data "VERSION;." --collect-all PyQt6 run_iograph.py
 
       - name: Prepare artifact
         shell: powershell
