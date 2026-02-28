@@ -1881,6 +1881,8 @@ class MainWindow(QMainWindow):
 
 
 def main() -> None:
+    if sys.platform.startswith("win"):
+        QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()

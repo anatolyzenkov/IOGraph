@@ -65,6 +65,19 @@ class TrackCanvas(QWidget):
         self._timer.setInterval(33)
         self._timer.timeout.connect(self._on_tick)
 
+    @staticmethod
+    def _is_windows() -> bool:
+        return sys.platform.startswith("win")
+
+    def _set_quality_hints(self, painter: QPainter) -> None:
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+        if self._is_windows():
+            # Mixed-DPI Windows setups benefit from the strongest painter quality flags.
+            hq_aa = getattr(QPainter.RenderHint, "HighQualityAntialiasing", None)
+            if hq_aa is not None:
+                painter.setRenderHint(hq_aa, True)
+
     # Public API
 
     def start_tracking(self) -> None:
@@ -195,8 +208,19 @@ class TrackCanvas(QWidget):
         cache = QPixmap(path)
         if cache.isNull():
             return False
-        if cache.width() != self._desktop_rect.width() or cache.height() != self._desktop_rect.height():
-            return False
+        if sys.platform.startswith("win"):
+            scale = max(1.0, self._get_pixel_scale())
+            expected_w = max(1, int(round(self._desktop_rect.width() * scale)))
+            expected_h = max(1, int(round(self._desktop_rect.height() * scale)))
+            logical_w = int(round(cache.deviceIndependentSize().width()))
+            logical_h = int(round(cache.deviceIndependentSize().height()))
+            if cache.width() == expected_w and cache.height() == expected_h:
+                cache.setDevicePixelRatio(scale)
+            elif logical_w != self._desktop_rect.width() or logical_h != self._desktop_rect.height():
+                return False
+        else:
+            if cache.width() != self._desktop_rect.width() or cache.height() != self._desktop_rect.height():
+                return False
         self._desktop_background_source = cache
         self.update()
         return True
@@ -452,7 +476,17 @@ class TrackCanvas(QWidget):
         if isinstance(bg_img, QImage):
             p = QPainter(image)
             try:
-                p.drawImage(QRectF(0.0, 0.0, float(image.width()), float(image.height())), bg_img, QRectF(0.0, 0.0, float(bg_img.width()), float(bg_img.height())))
+                p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+                if sys.platform.startswith("win") and (bg_img.width() != image.width() or bg_img.height() != image.height()):
+                    # Windows mixed-DPI export path: avoid jagged desktop background when upscale is required.
+                    scaled = bg_img.scaled(image.size(), Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                    p.drawImage(0, 0, scaled)
+                else:
+                    p.drawImage(
+                        QRectF(0.0, 0.0, float(image.width()), float(image.height())),
+                        bg_img,
+                        QRectF(0.0, 0.0, float(bg_img.width()), float(bg_img.height())),
+                    )
             finally:
                 p.end()
         cls._render_raw_on_image(
@@ -532,11 +566,17 @@ class TrackCanvas(QWidget):
             return False
 
         self._refresh_desktop_geometry()
-        base = QPixmap(self._desktop_rect.width(), self._desktop_rect.height())
+        capture_scale = self._get_pixel_scale() if sys.platform.startswith("win") else 1.0
+        base_w = max(1, int(round(self._desktop_rect.width() * capture_scale)))
+        base_h = max(1, int(round(self._desktop_rect.height() * capture_scale)))
+        base = QPixmap(base_w, base_h)
+        if sys.platform.startswith("win"):
+            base.setDevicePixelRatio(capture_scale)
         base.fill(Qt.GlobalColor.black)
 
         painter = QPainter(base)
         try:
+            self._set_quality_hints(painter)
             if self._use_multiple_monitors:
                 for screen in screens:
                     s_rect = screen.geometry()
@@ -706,7 +746,7 @@ class TrackCanvas(QWidget):
     def _draw_line(self, pix: QPixmap, p0: QPointF, p1: QPointF, color: QColor, width: float) -> None:
         p = QPainter(pix)
         try:
-            p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            self._set_quality_hints(p)
             pen = QPen(color)
             pen.setWidthF(max(0.0, width))
             p.setPen(pen)
@@ -736,7 +776,7 @@ class TrackCanvas(QWidget):
 
         p = QPainter(pix)
         try:
-            p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            self._set_quality_hints(p)
             p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(halo_color)
             p.drawEllipse(hx, hy, halo_d, halo_d)
@@ -855,6 +895,7 @@ class TrackCanvas(QWidget):
 
         p = QPainter(self)
         try:
+            self._set_quality_hints(p)
             bg = Qt.GlobalColor.black if self._colorful_scheme else Qt.GlobalColor.white
             p.fillRect(self.rect(), bg)
 
@@ -915,7 +956,11 @@ class TrackCanvas(QWidget):
         screen = self.screen() or QGuiApplication.primaryScreen()
         if screen is None:
             return 1.0
-        return 2.0 if screen.devicePixelRatio() >= 1.5 else 1.0
+        dpr = max(1.0, float(screen.devicePixelRatio()))
+        if self._is_windows():
+            # Keep fractional DPR on Windows to avoid aliasing on mixed-DPI monitors.
+            return round(dpr, 2)
+        return 2.0 if dpr >= 1.5 else 1.0
 
     def _get_single_screen(self):
         screens = QGuiApplication.screens()
