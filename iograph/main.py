@@ -591,16 +591,19 @@ class MainWindow(QMainWindow):
         self._tray_reset_action.triggered.connect(self._reset_canvas)
         self._tray_reset_action.setEnabled(False)
         tray_menu.addSeparator()
-        self._tray_save_image_action = tray_menu.addAction("Save...")
+        self._tray_save_image_action = tray_menu.addAction("Save Image...")
         self._tray_save_image_action.triggered.connect(self._save_image)
         self._tray_save_image_action.setEnabled(False)
+        self._tray_save_csv_action = tray_menu.addAction("Save Raw Data...")
+        self._tray_save_csv_action.triggered.connect(self._save_csv)
+        self._tray_save_csv_action.setEnabled(False)
         tray_menu.addSeparator()
         self._tray_settings_action = tray_menu.addAction("Show Settings")
         self._tray_settings_action.triggered.connect(self._toggle_settings_from_tray)
         more_menu = tray_menu.addMenu("More")
-        self._tray_save_csv_action = more_menu.addAction("Save Raw Data...")
-        self._tray_save_csv_action.triggered.connect(self._save_csv)
-        self._tray_save_csv_action.setEnabled(False)
+        more_menu.addAction("Get Source Code from GitHub", lambda: self._open_url(self._GITHUB_URL))
+        more_menu.addAction("Join Our Facebook Community", lambda: self._open_url(self._FACEBOOK_URL))
+        more_menu.addAction("Visit IOGraphica's Website", lambda: self._open_url(self._WEBSITE_URL))
         more_menu.addSeparator()
         self._tray_check_updates_action = more_menu.addAction("Check for Updates")
         self._tray_check_updates_action.triggered.connect(lambda: self._check_for_updates(manual=True))
@@ -609,10 +612,6 @@ class MainWindow(QMainWindow):
         self._tray_auto_update_action.toggled.connect(self._on_auto_update_toggled)
         self._tray_install_update_action = more_menu.addAction("Install Downloaded Update")
         self._tray_install_update_action.triggered.connect(self._open_downloaded_update)
-        more_menu.addSeparator()
-        more_menu.addAction("Get Source Code from GitHub", lambda: self._open_url(self._GITHUB_URL))
-        more_menu.addAction("Join Our Facebook Community", lambda: self._open_url(self._FACEBOOK_URL))
-        more_menu.addAction("Visit IOGraphica's Website", lambda: self._open_url(self._WEBSITE_URL))
         more_menu.addSeparator()
         more_menu.addAction("About IOGraph", self._show_about_dialog)
         tray_menu.addSeparator()
@@ -1810,6 +1809,10 @@ class MainWindow(QMainWindow):
             self._tracking_toggle_action.setText("Pause")
         else:
             self._tracking_toggle_action.setText("Start" if elapsed == 0 else "Resume")
+
+        # Safety net: if async preview rerender already finished, ensure central toggle is visible.
+        if self._preview_render_thread is None and not self._toggle_btn.isVisible():
+            self._toggle_btn.setVisible(True)
 
         self._update_tray_state()
 
