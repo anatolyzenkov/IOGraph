@@ -11,7 +11,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from PyQt6.QtCore import QEvent, QObject, QSettings, QSize, Qt, QThread, QTimer, QStandardPaths, QUrl, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QAction, QCursor, QDesktopServices, QFont, QGuiApplication, QIcon, QImage
+from PyQt6.QtGui import QAction, QColor, QCursor, QDesktopServices, QFont, QGuiApplication, QIcon, QImage, QPainter
 from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -247,6 +247,7 @@ class MainWindow(QMainWindow):
     _SESSION_CHUNK_MS = 5 * 60 * 1000
     _VERSION_FILE = Path(__file__).resolve().parent.parent / "VERSION"
     _AUTO_UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000
+    _UPDATE_BADGE_MAX_IGNORES = 3
 
     def __init__(self) -> None:
         super().__init__()
@@ -565,7 +566,7 @@ class MainWindow(QMainWindow):
         self._auto_update_action.setCheckable(True)
         self._auto_update_action.toggled.connect(self._on_auto_update_toggled)
         help_menu.addAction(self._auto_update_action)
-        install_downloaded_action = QAction("Install Downloaded Update", self)
+        install_downloaded_action = QAction("Update now", self)
         install_downloaded_action.triggered.connect(self._open_downloaded_update)
         help_menu.addAction(install_downloaded_action)
         self._install_downloaded_update_action = install_downloaded_action
@@ -585,6 +586,9 @@ class MainWindow(QMainWindow):
         self._tray_icon = QSystemTrayIcon(self)
         self._tray_icon.setIcon(self._tray_state_icon(tracking=False))
         tray_menu = QMenu(self)
+        self._tray_install_update_action = tray_menu.addAction("Update now")
+        self._tray_install_update_action.triggered.connect(self._open_downloaded_update)
+        self._tray_update_sep_action = tray_menu.addSeparator()
         self._tray_toggle_action = tray_menu.addAction("Start")
         self._tray_toggle_action.triggered.connect(lambda: self._set_tracking(not self._canvas.is_tracking()))
         self._tray_reset_action = tray_menu.addAction("Reset")
@@ -610,8 +614,6 @@ class MainWindow(QMainWindow):
         self._tray_auto_update_action = more_menu.addAction("Check for Updates Automatically")
         self._tray_auto_update_action.setCheckable(True)
         self._tray_auto_update_action.toggled.connect(self._on_auto_update_toggled)
-        self._tray_install_update_action = more_menu.addAction("Install Downloaded Update")
-        self._tray_install_update_action.triggered.connect(self._open_downloaded_update)
         more_menu.addSeparator()
         more_menu.addAction("About IOGraph", self._show_about_dialog)
         tray_menu.addSeparator()
@@ -1335,9 +1337,28 @@ class MainWindow(QMainWindow):
 
     def _tray_state_icon(self, tracking: bool) -> QIcon:
         icon = QIcon(str(self._resource_file_for_dpi(self._tray_icon_name(tracking))))
+        if self._should_show_update_badge():
+            size = icon.actualSize(QSize(22, 22))
+            pm = icon.pixmap(size)
+            p = QPainter(pm)
+            p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            d = max(5, min(pm.width(), pm.height()) // 3)
+            x = pm.width() - d - 1
+            y = 1
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor(255, 59, 48))
+            p.drawEllipse(x, y, d, d)
+            p.end()
+            return QIcon(pm)
         if sys.platform == "darwin":
             icon.setIsMask(True)
         return icon
+
+    def _should_show_update_badge(self) -> bool:
+        if not self._has_pending_downloaded_update():
+            return False
+        ignores = int(self._settings.value("updates/install_ignore_count", 0, int))
+        return ignores < self._UPDATE_BADGE_MAX_IGNORES
 
     def _app_icon(self) -> QIcon:
         icon = QIcon()
@@ -1535,6 +1556,7 @@ class MainWindow(QMainWindow):
         self._settings.remove("updates/last_downloaded_path")
         self._settings.remove("updates/last_downloaded_version")
         self._settings.remove("updates/last_auto_downloaded_version")
+        self._settings.remove("updates/install_ignore_count")
 
     def _check_for_updates(self, manual: bool) -> None:
         if self._update_check_thread is not None:
@@ -1581,6 +1603,18 @@ class MainWindow(QMainWindow):
                 if saved_path and Path(saved_path).exists():
                     return
                 self._settings.remove("updates/last_auto_downloaded_version")
+        if self._is_latest_update_already_downloaded(latest_tag):
+            if manual:
+                answer = QMessageBox.question(
+                    self,
+                    "Update Ready",
+                    "New version of IOGraph is already downloaded.\n\nClose and install now?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.Yes,
+                )
+                if answer == QMessageBox.StandardButton.Yes:
+                    self._open_downloaded_update()
+            return
         if self._update_download_thread is not None:
             return
         if manual:
@@ -1653,6 +1687,7 @@ class MainWindow(QMainWindow):
         tagged_version = f"v{latest_version}"
         self._settings.setValue("updates/last_downloaded_path", str(local))
         self._settings.setValue("updates/last_downloaded_version", tagged_version)
+        self._settings.setValue("updates/install_ignore_count", 0)
         self._update_install_update_actions()
         if not manual:
             self._settings.setValue("updates/last_auto_downloaded_version", tagged_version)
@@ -1660,14 +1695,18 @@ class MainWindow(QMainWindow):
         prompt = QMessageBox.question(
             self,
             "Update Ready",
-            f"IOGraph {latest_version} is downloaded and ready to install.\n\nInstall now?",
+            "New version of IOGraph is ready to install.\n\nClose and install now?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.Yes,
         )
         if prompt == QMessageBox.StandardButton.Yes:
+            self._settings.setValue("updates/install_ignore_count", 0)
             self._open_installer_file(local)
             self._status("Update downloaded and opened")
             return
+        ignored = int(self._settings.value("updates/install_ignore_count", 0, int)) + 1
+        self._settings.setValue("updates/install_ignore_count", ignored)
+        self._update_tray_state()
         self._status("Update downloaded")
 
     def _on_update_download_thread_closed(self) -> None:
@@ -1683,10 +1722,8 @@ class MainWindow(QMainWindow):
         self._update_install_update_actions()
 
     def _update_install_update_actions(self) -> None:
-        path = self._settings.value("updates/last_downloaded_path", "", str)
-        version = self._settings.value("updates/last_downloaded_version", "", str)
-        has_file = bool(path and Path(path).exists())
-        label = f"Install IOGraph {version}" if (has_file and version) else "Install Downloaded Update"
+        has_file = self._has_pending_downloaded_update()
+        label = "Update now"
         action = getattr(self, "_install_downloaded_update_action", None)
         if action is not None:
             action.setText(label)
@@ -1695,6 +1732,30 @@ class MainWindow(QMainWindow):
         if tray_action is not None:
             tray_action.setText(label)
             tray_action.setEnabled(has_file)
+            tray_action.setVisible(has_file)
+        tray_sep = getattr(self, "_tray_update_sep_action", None)
+        if tray_sep is not None:
+            tray_sep.setVisible(has_file)
+        self._update_tray_state()
+
+    def _has_pending_downloaded_update(self) -> bool:
+        path = self._settings.value("updates/last_downloaded_path", "", str)
+        return bool(path and Path(path).exists())
+
+    def _is_latest_update_already_downloaded(self, latest_tag: str) -> bool:
+        downloaded_tag = str(self._settings.value("updates/last_downloaded_version", "", str)).strip()
+        if not downloaded_tag:
+            return False
+        if self._normalize_version_tag(downloaded_tag) != self._normalize_version_tag(latest_tag):
+            return False
+        path = self._settings.value("updates/last_downloaded_path", "", str)
+        if path and Path(path).exists():
+            return True
+        # stale metadata for missing file should not block normal update flow
+        self._settings.remove("updates/last_downloaded_path")
+        self._settings.remove("updates/last_downloaded_version")
+        self._update_install_update_actions()
+        return False
 
     def _open_downloaded_update(self) -> None:
         path = self._settings.value("updates/last_downloaded_path", "", str)
@@ -1705,9 +1766,11 @@ class MainWindow(QMainWindow):
         if not local.exists():
             self._settings.remove("updates/last_downloaded_path")
             self._settings.remove("updates/last_downloaded_version")
+            self._settings.remove("updates/install_ignore_count")
             self._update_install_update_actions()
             QMessageBox.information(self, "Install Downloaded Update", "Downloaded update file no longer exists.")
             return
+        self._settings.setValue("updates/install_ignore_count", 0)
         self._open_installer_file(local)
 
     def _open_installer_file(self, path: Path) -> None:
