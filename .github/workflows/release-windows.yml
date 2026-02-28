@@ -31,11 +31,11 @@ jobs:
           pip install pyinstaller pillow
 
       - name: Set build version from tag
-        shell: powershell
+        shell: pwsh
         run: |
           $version = "${env:IOGRAPH_VERSION}"
           if ($version.StartsWith("v")) { $version = $version.Substring(1) }
-          Set-Content -Path VERSION -Value $version -Encoding UTF8
+          Set-Content -Path VERSION -Value $version -Encoding utf8NoBOM
 
       - name: Build Windows app
         run: |

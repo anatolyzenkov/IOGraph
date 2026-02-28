@@ -197,7 +197,7 @@ class UpdateCheckWorker(QObject):
 
     @staticmethod
     def _normalize_version(version: str) -> str:
-        v = version.strip()
+        v = str(version).replace("\ufeff", "").strip()
         if v.lower().startswith("v"):
             return v[1:]
         return v
@@ -1562,7 +1562,7 @@ class MainWindow(QMainWindow):
         )
 
     def _resolve_app_version(self) -> str:
-        env_version = os.environ.get("IOGRAPH_VERSION", "").strip()
+        env_version = str(os.environ.get("IOGRAPH_VERSION", "")).replace("\ufeff", "").strip()
         if env_version:
             return env_version
         if getattr(sys, "frozen", False):
@@ -1584,14 +1584,14 @@ class MainWindow(QMainWindow):
                 version_candidates.append(Path(sys.executable).resolve().parent / "VERSION")
                 for version_path in version_candidates:
                     if version_path.exists():
-                        file_version = version_path.read_text(encoding="utf-8").strip()
+                        file_version = version_path.read_text(encoding="utf-8").replace("\ufeff", "").strip()
                         if file_version:
                             return file_version
             except Exception:
                 pass
         try:
             if self._VERSION_FILE.exists():
-                file_version = self._VERSION_FILE.read_text(encoding="utf-8").strip()
+                file_version = self._VERSION_FILE.read_text(encoding="utf-8").replace("\ufeff", "").strip()
                 if file_version:
                     return file_version
         except Exception:
@@ -1600,7 +1600,7 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _normalize_version_tag(version: str) -> str:
-        v = version.strip()
+        v = str(version).replace("\ufeff", "").strip()
         if v.lower().startswith("v"):
             return v[1:]
         return v
@@ -1678,7 +1678,7 @@ class MainWindow(QMainWindow):
                 downloaded_path = self._pending_downloaded_update_path()
                 zip_update = self._is_zip_update(downloaded_path)
                 message = (
-                    "New version of IOGraph is already downloaded.\n\nOpen downloaded update zip?"
+                    "New version of IOGraph is already downloaded.\n\nOpen downloaded update package?"
                     if zip_update
                     else "New version of IOGraph is already downloaded.\n\nClose and install now?"
                 )
@@ -1779,7 +1779,7 @@ class MainWindow(QMainWindow):
             self._settings.setValue("updates/last_prompted_version", tagged_version)
         is_zip = self._is_zip_update(local)
         prompt_message = (
-            "New version of IOGraph is downloaded.\n\nOpen downloaded update zip?"
+            "New version of IOGraph is downloaded.\n\nOpen downloaded update package?"
             if is_zip
             else "New version of IOGraph is ready to install.\n\nClose and install now?"
         )
@@ -1816,7 +1816,7 @@ class MainWindow(QMainWindow):
         has_file = self._has_pending_downloaded_update()
         downloaded = self._pending_downloaded_update_path()
         if self._is_zip_update(downloaded):
-            label = "Open update zip"
+            label = "Open Update Package"
         else:
             label = "Update now"
         action = getattr(self, "_install_downloaded_update_action", None)
