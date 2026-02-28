@@ -1744,10 +1744,18 @@ class MainWindow(QMainWindow):
                 return base
             stem, suffix = base.stem, base.suffix
             return target_dir / f"{stem}-{latest_version}{suffix}"
-        target_dir = Path.home() / "Library" / "Application Support" / "IOGraph" / "updates"
+        target_dir = self._updates_cache_dir()
         target_dir.mkdir(parents=True, exist_ok=True)
-        # Auto-update keeps a single rolling installer file per platform asset.
+        # Auto-update keeps a single rolling artifact file per platform asset.
         return target_dir / asset_name
+
+    def _updates_cache_dir(self) -> Path:
+        appdata = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppLocalDataLocation)
+        if not appdata:
+            appdata = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation)
+        if appdata:
+            return Path(appdata) / "updates"
+        return Path.home() / ".iograph" / "updates"
 
     def _on_update_download_finished(self, ok: bool, path: str, error: str, latest_version: str, manual: bool) -> None:
         if not ok:
