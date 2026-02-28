@@ -465,6 +465,7 @@ class MainWindow(QMainWindow):
         self._setup_actions()
         self._bind_control_panel()
         self._load_settings()
+        self._update_multi_monitor_controls_availability()
         self._cleanup_downloaded_update_if_installed()
         self._apply_window_geometry()
         self._load_session_state()
@@ -474,8 +475,8 @@ class MainWindow(QMainWindow):
         self._ui_timer.start()
         app = QGuiApplication.instance()
         if app is not None:
-            app.screenAdded.connect(lambda screen: self._apply_window_geometry())
-            app.screenRemoved.connect(lambda screen: self._apply_window_geometry())
+            app.screenAdded.connect(lambda screen: self._on_screens_changed())
+            app.screenRemoved.connect(lambda screen: self._on_screens_changed())
         self._setup_tray()
         self._update_install_update_actions()
         self._refresh_dpi_dependent_icons()
@@ -553,10 +554,6 @@ class MainWindow(QMainWindow):
         help_menu.addAction(about_action)
         help_menu.addSeparator()
 
-        source_action = QAction("Get Source Code from GitHub...", self)
-        source_action.triggered.connect(lambda: self._open_url(self._GITHUB_URL))
-        help_menu.addAction(source_action)
-
         check_updates_action = QAction("Check for Updates", self)
         check_updates_action.triggered.connect(lambda: self._check_for_updates(manual=True))
         help_menu.addAction(check_updates_action)
@@ -572,6 +569,9 @@ class MainWindow(QMainWindow):
         self._install_downloaded_update_action = install_downloaded_action
 
         help_menu.addSeparator()
+        source_action = QAction("Get Source Code from GitHub...", self)
+        source_action.triggered.connect(lambda: self._open_url(self._GITHUB_URL))
+        help_menu.addAction(source_action)
         facebook_action = QAction("Join our Facebook Community...", self)
         facebook_action.triggered.connect(lambda: self._open_url(self._FACEBOOK_URL))
         help_menu.addAction(facebook_action)
@@ -867,6 +867,15 @@ class MainWindow(QMainWindow):
         self._apply_window_geometry()
         self._request_preview_rerender()
         self._sync_ui_state()
+
+    def _on_screens_changed(self) -> None:
+        self._update_multi_monitor_controls_availability()
+        self._apply_window_geometry()
+
+    def _update_multi_monitor_controls_availability(self) -> None:
+        has_multiple = len(QGuiApplication.screens()) > 1
+        self._multi_monitor_action.setEnabled(has_multiple)
+        self._multi_monitor_box.setEnabled(has_multiple)
 
     def _load_settings(self) -> None:
         ignore_stops = self._settings.value("options/ignore_mouse_stops", False, bool)
@@ -1463,6 +1472,19 @@ class MainWindow(QMainWindow):
 
     def _request_quit(self) -> None:
         self._force_quit_requested = True
+        if sys.platform.startswith("win") and not self.isVisible():
+            if not self._confirm_exit():
+                self._force_quit_requested = False
+                return
+            self._save_session_state()
+            self._save_settings()
+            tray = getattr(self, "_tray_icon", None)
+            if tray is not None:
+                tray.hide()
+            app = QApplication.instance()
+            if app is not None:
+                app.quit()
+            return
         self.close()
 
     def _on_panel_anim_tick(self) -> None:
