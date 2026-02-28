@@ -82,7 +82,7 @@ jobs:
             "    VarFileInfo([VarStruct(u'Translation', [1033, 1200])])"
             "  ]"
             ")"
-          ) -join \"`n\"
+          ) -join "`n"
           Set-Content -Path build/version_info.txt -Value $content -Encoding utf8NoBOM
 
       - name: Build Windows app
