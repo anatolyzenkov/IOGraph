@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 from urllib.error import HTTPError, URLError
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
 from PyQt6.QtCore import QEvent, QLockFile, QObject, QSettings, QSize, Qt, QThread, QTimer, QStandardPaths, QUrl, pyqtSignal, pyqtSlot
@@ -276,9 +277,10 @@ class MainWindow(QMainWindow):
     _MONTH_NAMES = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
     _RESOURCE_DIR = Path(__file__).resolve().parent / "resources"
     _APP_ICON_FILES = ("icon16.png", "icon32.png", "icon64.png", "icon128.png", "icon256.png", "icon512.png")
+    _ABOUT_IOGRAPHICA_URL = "https://anatolyzenkov.com/iographica?utm_source=iograph&utm_medium=desktop&utm_campaign=about_iographica"
+    _WEBSITE_URL = "https://anatolyzenkov.com/iographica?utm_source=iograph&utm_medium=desktop&utm_campaign=iograph_website"
     _GITHUB_URL = "https://github.com/anatolyzenkov/IOGraph"
-    _FACEBOOK_URL = "https://www.facebook.com/pages/IOGraphica/317794951637"
-    _WEBSITE_URL = "https://iographica.com/"
+    _DONATE_URL = "https://donate.stripe.com/7sY9AUcjj7W26nq7Rj67S02"
     _SESSION_STATE_FILE = "session_state.json"
     _SESSION_CHUNK_MS = 5 * 60 * 1000
     _VERSION_FILE = Path(__file__).resolve().parent.parent / "VERSION"
@@ -489,10 +491,10 @@ class MainWindow(QMainWindow):
         self._url_btn.setIconSize(QSize(15, 15))
         self._url_btn.setFlat(True)
         self._url_btn.setStyleSheet("QPushButton { border: none; background: transparent; }")
-        self._url_btn.setIcon(self._icon("URLBtn.png"))
+        self._url_btn.setIcon(self._heart_icon("HeartBtn.png"))
         self._url_btn.pressed.connect(self._on_url_pressed)
         self._url_btn.released.connect(self._on_url_released)
-        self._url_btn.clicked.connect(lambda: webbrowser.open("https://iographica.com/"))
+        self._url_btn.clicked.connect(lambda: webbrowser.open("https://donate.stripe.com/7sY9AUcjj7W26nq7Rj67S02"))
         secondary_layout.addWidget(self._url_btn)
         bottom_layout.addWidget(self._secondary_panel, stretch=0)
 
@@ -607,15 +609,18 @@ class MainWindow(QMainWindow):
         self._install_downloaded_update_action = install_downloaded_action
 
         help_menu.addSeparator()
-        source_action = QAction("Get Source Code from GitHub...", self)
-        source_action.triggered.connect(lambda: self._open_url(self._GITHUB_URL))
-        help_menu.addAction(source_action)
-        facebook_action = QAction("Join our Facebook Community...", self)
-        facebook_action.triggered.connect(lambda: self._open_url(self._FACEBOOK_URL))
-        help_menu.addAction(facebook_action)
-        website_action = QAction("Visit IOGraphica's Website...", self)
+        about_iographica_action = QAction("About IOGraphica", self)
+        about_iographica_action.triggered.connect(lambda: self._open_url(self._ABOUT_IOGRAPHICA_URL))
+        help_menu.addAction(about_iographica_action)
+        website_action = QAction("IOGraph Website", self)
         website_action.triggered.connect(lambda: self._open_url(self._WEBSITE_URL))
         help_menu.addAction(website_action)
+        source_action = QAction("Get Source Code", self)
+        source_action.triggered.connect(lambda: self._open_url(self._GITHUB_URL))
+        help_menu.addAction(source_action)
+        donate_action = QAction("Support IOGraphica", self)
+        donate_action.triggered.connect(lambda: self._open_url(self._DONATE_URL))
+        help_menu.addAction(donate_action)
 
     def _setup_tray(self) -> None:
         if not QSystemTrayIcon.isSystemTrayAvailable():
@@ -643,9 +648,10 @@ class MainWindow(QMainWindow):
         self._tray_settings_action = tray_menu.addAction("Show Settings")
         self._tray_settings_action.triggered.connect(self._toggle_settings_from_tray)
         more_menu = tray_menu.addMenu("More")
-        more_menu.addAction("Get Source Code from GitHub", lambda: self._open_url(self._GITHUB_URL))
-        more_menu.addAction("Join Our Facebook Community", lambda: self._open_url(self._FACEBOOK_URL))
-        more_menu.addAction("Visit IOGraphica's Website", lambda: self._open_url(self._WEBSITE_URL))
+        more_menu.addAction("About IOGraphica", lambda: self._open_url(self._ABOUT_IOGRAPHICA_URL))
+        more_menu.addAction("IOGraph Website", lambda: self._open_url(self._WEBSITE_URL))
+        more_menu.addAction("Get Source Code", lambda: self._open_url(self._GITHUB_URL))
+        more_menu.addAction("Support IOGraphica", lambda: self._open_url(self._DONATE_URL))
         more_menu.addSeparator()
         self._tray_check_updates_action = more_menu.addAction("Check for Updates")
         self._tray_check_updates_action.triggered.connect(lambda: self._check_for_updates(manual=True))
@@ -1337,16 +1343,20 @@ class MainWindow(QMainWindow):
         self._update_desktop_btn.setIcon(self._icon("UpdateDesktopBtn.png"))
 
     def _on_url_pressed(self) -> None:
-        self._url_btn.setIcon(self._icon("URLPressedBtn.png"))
+        self._url_btn.setIcon(self._heart_icon("HeartPressedBtn.png"))
 
     def _on_url_released(self) -> None:
         self._update_url_icon()
 
     def _update_url_icon(self) -> None:
         if self._url_btn.isDown():
-            self._url_btn.setIcon(self._icon("URLPressedBtn.png"))
+            self._url_btn.setIcon(self._heart_icon("HeartPressedBtn.png"))
             return
-        self._url_btn.setIcon(self._icon("URLBtn.png"))
+        self._url_btn.setIcon(self._heart_icon("HeartBtn.png"))
+
+    def _heart_icon(self, name: str) -> QIcon:
+        # Donation icon should stay visually stable across system palette changes.
+        return QIcon(str(self._resource_file_for_dpi(name)))
 
     def _icon(self, name: str) -> QIcon:
         themed_name = self._themed_icon_name(name)
@@ -1387,6 +1397,9 @@ class MainWindow(QMainWindow):
 
     def _tray_state_icon(self, tracking: bool) -> QIcon:
         icon = QIcon(str(self._resource_file_for_dpi(self._tray_icon_name(tracking))))
+        if sys.platform == "darwin":
+            icon.setIsMask(True)
+            return icon
         if sys.platform.startswith("win"):
             return icon
         if self._should_show_update_badge():
@@ -1402,11 +1415,11 @@ class MainWindow(QMainWindow):
             p.drawEllipse(x, y, d, d)
             p.end()
             return QIcon(pm)
-        if sys.platform == "darwin":
-            icon.setIsMask(True)
         return icon
 
     def _should_show_update_badge(self) -> bool:
+        if sys.platform == "darwin":
+            return False
         if not self._has_pending_downloaded_update():
             return False
         ignores = int(self._settings.value("updates/install_ignore_count", 0, int))
@@ -1560,7 +1573,18 @@ class MainWindow(QMainWindow):
         return 0.5 + (1.0 - (1.0 - cos(pi * (1.0 - n))) ** f) * 0.5
 
     def _open_url(self, url: str) -> None:
-        webbrowser.open(url)
+        webbrowser.open(self._append_utm_term(url))
+
+    def _append_utm_term(self, url: str) -> str:
+        try:
+            parts = urlsplit(url)
+            params = dict(parse_qsl(parts.query, keep_blank_values=True))
+            if "utm_source" not in params:
+                return url
+            params["utm_term"] = self._app_version
+            return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(params), parts.fragment))
+        except Exception:
+            return url
 
     def _show_about_dialog(self) -> None:
         QMessageBox.information(
@@ -1968,12 +1992,18 @@ class MainWindow(QMainWindow):
             self._show_on_top()
 
     def _show_on_top(self) -> None:
+        # Robust foreground restore for tray/menu activation across macOS/Windows.
+        state = self.windowState()
+        state &= ~Qt.WindowState.WindowMinimized
+        self.setWindowState(state)
         if not self.isVisible():
-            self.show()
-        if self.isMinimized():
+            self.showNormal()
+        elif self.isMinimized():
             self.showNormal()
         self.raise_()
         self.activateWindow()
+        QTimer.singleShot(0, self.raise_)
+        QTimer.singleShot(0, self.activateWindow)
 
     def _update_tray_state(self) -> None:
         tray = getattr(self, "_tray_icon", None)
