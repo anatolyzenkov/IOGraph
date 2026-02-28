@@ -685,6 +685,7 @@ class MainWindow(QMainWindow):
     def _on_ignore_stops_toggled(self, checked: bool) -> None:
         if self._suppress_option_handlers:
             return
+        self._persist_option("options/ignore_mouse_stops", checked)
         self._canvas.set_ignore_mouse_stops(checked, rebuild=False)
         self._request_preview_rerender()
         self._sync_ui_state()
@@ -793,10 +794,16 @@ class MainWindow(QMainWindow):
     def _remember_save_dir(self, directory: Path) -> None:
         if directory.exists() and directory.is_dir():
             self._settings.setValue("options/last_save_dir", str(directory))
+            self._settings.sync()
+
+    def _persist_option(self, key: str, value) -> None:
+        self._settings.setValue(key, value)
+        self._settings.sync()
 
     def _on_use_desktop_toggled(self, checked: bool) -> None:
         if self._suppress_option_handlers:
             return
+        self._persist_option("options/use_desktop_background", checked)
         self._canvas.set_use_desktop_background(checked)
         self._refresh_desktop_action.setEnabled(checked)
         self._update_desktop_btn.setVisible(checked)
@@ -905,6 +912,7 @@ class MainWindow(QMainWindow):
             return
         if checked == self._canvas.is_use_multiple_monitors():
             return
+        self._persist_option("options/use_multiple_monitors", checked)
         self._canvas.set_suspend_preview_updates(True)
         self._canvas.set_use_multiple_monitors(checked, rebuild=False)
         if self._use_desktop_action.isChecked():
@@ -957,6 +965,7 @@ class MainWindow(QMainWindow):
         self._settings.setValue("options/use_multiple_monitors", self._multi_monitor_action.isChecked())
         self._settings.setValue("options/use_desktop_background", self._use_desktop_action.isChecked())
         self._settings.setValue("options/automatic_update", self._auto_update_action.isChecked())
+        self._settings.sync()
 
     def _session_state_path(self) -> Path:
         base = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation)
@@ -1467,6 +1476,7 @@ class MainWindow(QMainWindow):
             return
         if checked == self._canvas.is_colorful_scheme():
             return
+        self._persist_option("options/colorful_scheme", checked)
         self._canvas.set_colorful_scheme(checked, rebuild=False)
         self._request_preview_rerender()
         self._refresh_dpi_dependent_icons()
@@ -1951,7 +1961,7 @@ class MainWindow(QMainWindow):
         if self._suppress_option_handlers:
             return
         self._set_auto_update_state(checked)
-        self._settings.setValue("options/automatic_update", checked)
+        self._persist_option("options/automatic_update", checked)
 
     def _set_auto_update_state(self, checked: bool) -> None:
         self._suppress_option_handlers = True
