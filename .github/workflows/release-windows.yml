@@ -32,7 +32,7 @@ jobs:
 
       - name: Build Windows app
         run: |
-          pyinstaller --noconfirm --windowed --name IOGraph --icon iograph/resources/icon256.png --add-data "iograph/resources;iograph/resources" --add-data "VERSION;." --collect-all PyQt6 run_iograph.py
+          pyinstaller --noconfirm --windowed --name IOGraph --contents-directory runtime --icon iograph/resources/icon256.png --add-data "iograph/resources;iograph/resources" --add-data "VERSION;." --collect-all PyQt6 run_iograph.py
 
       - name: Prepare artifact
         shell: powershell
@@ -41,35 +41,15 @@ jobs:
           if (Test-Path "release/IOGraph-windows.zip") { Remove-Item "release/IOGraph-windows.zip" -Force }
           Compress-Archive -Path "dist/IOGraph/*" -DestinationPath "release/IOGraph-windows.zip"
 
-      - name: Install Inno Setup
-        shell: powershell
-        run: choco install innosetup --no-progress -y
-
-      - name: Build installer
-        shell: powershell
-        run: |
-          $version = "${env:IOGRAPH_VERSION}"
-          if ($version.StartsWith("v")) { $version = $version.Substring(1) }
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
-            "/DAppVersion=$version" `
-            "/DSourceDir=$pwd\dist\IOGraph" `
-            "/DOutputDir=$pwd\release" `
-            "/DOutputBaseFilename=IOGraph-windows-setup" `
-            "packaging\windows\IOGraph.iss"
-
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: IOGraph-windows
-          path: |
-            release/IOGraph-windows.zip
-            release/IOGraph-windows-setup.exe
+          path: release/IOGraph-windows.zip
 
       - name: Publish GitHub Release asset
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            release/IOGraph-windows.zip
-            release/IOGraph-windows-setup.exe
+          files: release/IOGraph-windows.zip
           prerelease: ${{ contains(github.ref_name, '-') }}
