@@ -30,6 +30,13 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller pillow
 
+      - name: Set build version from tag
+        shell: powershell
+        run: |
+          $version = "${env:IOGRAPH_VERSION}"
+          if ($version.StartsWith("v")) { $version = $version.Substring(1) }
+          Set-Content -Path VERSION -Value $version -Encoding UTF8
+
       - name: Build Windows app
         run: |
           pyinstaller --noconfirm --windowed --name IOGraph --contents-directory runtime --icon iograph/resources/icon256.png --add-data "iograph/resources;iograph/resources" --add-data "VERSION;." --collect-all PyQt6 run_iograph.py
