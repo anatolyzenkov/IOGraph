@@ -128,8 +128,10 @@ class UpdateCheckWorker(QObject):
                 }
             )
 
-    @staticmethod
-    def _pick_release(releases: list[dict], include_prerelease: bool) -> dict | None:
+    @classmethod
+    def _pick_release(cls, releases: list[dict], include_prerelease: bool) -> dict | None:
+        best_release: dict | None = None
+        best_key = None
         for release in releases:
             if not isinstance(release, dict):
                 continue
@@ -137,11 +139,17 @@ class UpdateCheckWorker(QObject):
                 continue
             if not include_prerelease and release.get("prerelease", False):
                 continue
-            if UpdateCheckWorker._pick_asset(release) is None:
+            if cls._pick_asset(release) is None:
                 # Ignore releases that do not provide an installer for this platform.
                 continue
-            return release
-        return None
+            tag = str(release.get("tag_name", "")).strip()
+            version_key = cls._version_key(cls._normalize_version(tag))
+            if version_key is None:
+                continue
+            if best_key is None or version_key > best_key:
+                best_key = version_key
+                best_release = release
+        return best_release
 
     @classmethod
     def _asset_value(cls, release: dict, key: str) -> str:
@@ -1750,8 +1758,7 @@ class MainWindow(QMainWindow):
             return target_dir / f"{stem}-{latest_version}{suffix}"
         target_dir = self._updates_cache_dir()
         target_dir.mkdir(parents=True, exist_ok=True)
-        # Auto-update keeps a single rolling artifact file per platform asset.
-        return target_dir / self._auto_update_cache_name(asset_name)
+        return target_dir / self._auto_update_cache_name(asset_name, latest_version)
 
     def _updates_cache_dir(self) -> Path:
         appdata = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppLocalDataLocation)
@@ -1762,15 +1769,17 @@ class MainWindow(QMainWindow):
         return Path.home() / ".iograph" / "updates"
 
     @staticmethod
-    def _auto_update_cache_name(asset_name: str) -> str:
+    def _auto_update_cache_name(asset_name: str, latest_version: str) -> str:
         suffix = Path(asset_name).suffix.lower()
         if not suffix:
             suffix = ".bin"
+        safe_version = re.sub(r"[^0-9A-Za-z._-]", "-", str(latest_version).strip())
+        safe_version = safe_version or "unknown"
         if sys.platform.startswith("win"):
-            return f"IOGraph-windows-latest{suffix}"
+            return f"IOGraph-windows-v{safe_version}{suffix}"
         if sys.platform == "darwin":
-            return f"IOGraph-macos-latest{suffix}"
-        return f"IOGraph-linux-latest{suffix}"
+            return f"IOGraph-macos-v{safe_version}{suffix}"
+        return f"IOGraph-linux-v{safe_version}{suffix}"
 
     def _on_update_download_finished(self, ok: bool, path: str, error: str, latest_version: str, manual: bool) -> None:
         if not ok:
@@ -1781,6 +1790,15 @@ class MainWindow(QMainWindow):
             return
         local = Path(path)
         tagged_version = f"v{latest_version}"
+        previous_path_raw = str(self._settings.value("updates/last_downloaded_path", "", str)).strip()
+        previous_version = str(self._settings.value("updates/last_downloaded_version", "", str)).strip()
+        if previous_path_raw and previous_path_raw != str(local) and previous_version != tagged_version:
+            old_path = Path(previous_path_raw)
+            try:
+                if old_path.exists():
+                    old_path.unlink()
+            except Exception:
+                pass
         self._settings.setValue("updates/last_downloaded_path", str(local))
         self._settings.setValue("updates/last_downloaded_version", tagged_version)
         self._settings.setValue("updates/install_ignore_count", 0)

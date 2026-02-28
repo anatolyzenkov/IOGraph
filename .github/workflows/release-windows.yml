@@ -37,9 +37,57 @@ jobs:
           if ($version.StartsWith("v")) { $version = $version.Substring(1) }
           Set-Content -Path VERSION -Value $version -Encoding utf8NoBOM
 
+      - name: Generate Windows version resource
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path build -Force | Out-Null
+          $version = "${env:IOGRAPH_VERSION}"
+          if ($version.StartsWith("v")) { $version = $version.Substring(1) }
+          $m = [regex]::Match($version, '^(\d+)\.(\d+)\.(\d+)')
+          if ($m.Success) {
+            $major = [int]$m.Groups[1].Value
+            $minor = [int]$m.Groups[2].Value
+            $patch = [int]$m.Groups[3].Value
+          } else {
+            $major = 0; $minor = 0; $patch = 0
+          }
+          $content = @"
+# UTF-8
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=($major, $minor, $patch, 0),
+    prodvers=($major, $minor, $patch, 0),
+    mask=0x3f,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0)
+  ),
+  kids=[
+    StringFileInfo(
+      [
+        StringTable(
+          u'040904B0',
+          [StringStruct(u'CompanyName', u'IOGraphica'),
+           StringStruct(u'FileDescription', u'IOGraph'),
+           StringStruct(u'FileVersion', u'$version'),
+           StringStruct(u'InternalName', u'IOGraph'),
+           StringStruct(u'OriginalFilename', u'IOGraph.exe'),
+           StringStruct(u'ProductName', u'IOGraph'),
+           StringStruct(u'ProductVersion', u'$version')]
+        )
+      ]
+    ),
+    VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
+  ]
+)
+"@
+          Set-Content -Path build/version_info.txt -Value $content -Encoding utf8NoBOM
+
       - name: Build Windows app
         run: |
-          pyinstaller --noconfirm --windowed --name IOGraph --contents-directory runtime --icon iograph/resources/icon256.png --add-data "iograph/resources;iograph/resources" --add-data "VERSION;." --collect-all PyQt6 run_iograph.py
+          pyinstaller --noconfirm --windowed --name IOGraph --contents-directory runtime --icon iograph/resources/icon256.png --version-file build/version_info.txt --add-data "iograph/resources;iograph/resources" --add-data "VERSION;." --collect-all PyQt6 run_iograph.py
 
       - name: Prepare artifact
         shell: powershell
