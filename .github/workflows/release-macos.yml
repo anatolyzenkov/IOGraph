@@ -88,9 +88,36 @@ jobs:
 
       - name: Publish GitHub Release asset
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            release/IOGraph-macos-*.zip
-            release/IOGraph-macos-*.dmg
-          prerelease: ${{ contains(github.ref_name, '-') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          retry() {
+            local attempt=1
+            local max_attempts=4
+            local delay_seconds=10
+            until "$@"; do
+              if (( attempt >= max_attempts )); then
+                return 1
+              fi
+              echo "Command failed. Retrying in ${delay_seconds}s (attempt ${attempt}/${max_attempts})..."
+              sleep "${delay_seconds}"
+              attempt=$((attempt + 1))
+              delay_seconds=$((delay_seconds * 2))
+            done
+          }
+
+          TAG="${GITHUB_REF_NAME}"
+          ZIP_FILE="release/IOGraph-macos-${IOGRAPH_VERSION}.zip"
+          DMG_FILE="release/IOGraph-macos-${IOGRAPH_VERSION}.dmg"
+
+          if ! gh release view "${TAG}" >/dev/null 2>&1; then
+            CREATE_ARGS=(gh release create "${TAG}" --title "${TAG}" --notes "Automated release for ${TAG}")
+            if [[ "${TAG}" == *-* ]]; then
+              CREATE_ARGS+=(--prerelease)
+            fi
+            retry "${CREATE_ARGS[@]}"
+          fi
+
+          retry gh release upload "${TAG}" "${ZIP_FILE}" "${DMG_FILE}" --clobber
