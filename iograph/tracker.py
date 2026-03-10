@@ -105,15 +105,22 @@ class TrackCanvas(QWidget):
             self.start_tracking()
 
     def reset(self) -> None:
+        was_tracking = self._tracking
         self._ensure_buffers()
         if self._preview_pixmap is not None:
             self._preview_pixmap.fill(Qt.GlobalColor.transparent)
         self._raw_samples = []
         self._accumulated_ms = 0
-        self._run_started_mono = None
         self._has_written_first_row = False
         self._last_elapsed_ms = 0
         self._radius = 0.0
+        if was_tracking:
+            self._prepare_for_update()
+            self._run_started_mono = monotonic()
+            self._timer.start()
+        else:
+            self._run_started_mono = None
+            self._timer.stop()
         self.update()
 
     def export_csv_text(self) -> str:
@@ -669,6 +676,9 @@ class TrackCanvas(QWidget):
     def _on_tick(self) -> None:
         if not self._tracking:
             return
+        if self._run_started_mono is None:
+            # Self-heal corrupted tracking state (e.g. after reset while tracking).
+            self._run_started_mono = monotonic()
 
         self._ensure_buffers()
         if self._preview_pixmap is None:
