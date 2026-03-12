@@ -1,7 +1,7 @@
 # IOGraph
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="iograph-2.0.0-dark.jpg">
-  <img width="450" alt="IOGraph" src="iograph-2.0.0-light.jpg">
+  <img width="876" alt="IOGraph" src="iograph-2.0.0-light.jpg">
 </picture>
 
 ### Turn your routine work into modern art
