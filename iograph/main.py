@@ -9,7 +9,6 @@ import re
 import shutil
 import subprocess
 import tempfile
-import zipfile
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
@@ -2055,8 +2054,12 @@ class MainWindow(QMainWindow):
             return (False, "app is not running from bundled build")
         try:
             staging_dir = Path(tempfile.mkdtemp(prefix="iograph-update-"))
-            with zipfile.ZipFile(zip_path, "r") as zf:
-                zf.extractall(staging_dir)
+            subprocess.run(
+                ["ditto", "-x", "-k", str(zip_path), str(staging_dir)],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
             app_candidates = sorted(staging_dir.rglob("*.app"))
             if not app_candidates:
                 return (False, "no .app bundle found in update package")
