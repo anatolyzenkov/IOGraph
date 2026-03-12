@@ -1730,9 +1730,21 @@ class MainWindow(QMainWindow):
         self._settings.remove("updates/install_ignore_count")
 
     def _check_for_updates(self, manual: bool) -> None:
+        if self._update_download_thread is not None:
+            if manual:
+                QMessageBox.information(
+                    self,
+                    "Check for Updates",
+                    "Update download is in progress.\nPlease wait until it finishes.",
+                )
+            return
         if self._update_check_thread is not None:
             if manual:
-                self._status("Update check is already running")
+                QMessageBox.information(
+                    self,
+                    "Check for Updates",
+                    "Update check is already running.\nPlease wait a few seconds and try again.",
+                )
             return
         include_prerelease = "-" in self._app_version
         thread = QThread(self)
@@ -1929,10 +1941,18 @@ class MainWindow(QMainWindow):
         self._set_update_check_busy(False)
 
     def _set_update_check_busy(self, busy: bool) -> None:
-        self._check_updates_action.setEnabled(not busy)
+        if self._update_download_thread is not None:
+            label = "Downloading Update..."
+        elif self._update_check_thread is not None:
+            label = "Checking for Updates..."
+        else:
+            label = "Check for Updates"
+        self._check_updates_action.setText(label)
+        self._check_updates_action.setEnabled(True)
         tray_check = getattr(self, "_tray_check_updates_action", None)
         if tray_check is not None:
-            tray_check.setEnabled(not busy)
+            tray_check.setText(label)
+            tray_check.setEnabled(True)
         self._update_install_update_actions()
 
     def _update_install_update_actions(self) -> None:
