@@ -88,8 +88,8 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
           security default-keychain -d user -s "${KEYCHAIN_PATH}"
 
-          SIGN_IDENTITY="$(security find-identity -v -p codesigning "${KEYCHAIN_PATH}" | grep 'Developer ID Application' | head -n 1 | sed -E 's/.*\"(.+)\"/\\1/')"
-          if [[ -z "${SIGN_IDENTITY}" ]]; then
+          SIGN_IDENTITY="$(security find-identity -v -p codesigning "${KEYCHAIN_PATH}" | awk -F '\"' '/Developer ID Application/ {print $2; exit}')"
+          if [[ -z "${SIGN_IDENTITY}" || "${SIGN_IDENTITY}" == "\\1" ]]; then
             echo "::error::Developer ID Application identity not found in imported certificate"
             exit 1
           fi
