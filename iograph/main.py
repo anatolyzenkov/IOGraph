@@ -2012,12 +2012,17 @@ class MainWindow(QMainWindow):
                 QDesktopServices.openUrl(QUrl.fromLocalFile(str(path.parent)))
             return
         if self._is_zip_update(path) and sys.platform == "darwin":
-            if self._install_macos_zip_update(path):
+            ok, error = self._install_macos_zip_update(path)
+            if ok:
                 return
             QMessageBox.warning(
                 self,
                 "Install Downloaded Update",
-                "Automatic install failed. Opening downloaded package for manual installation.",
+                (
+                    "Automatic install failed. Opening downloaded package for manual installation."
+                    if not error
+                    else f"Automatic install failed: {error}\n\nOpening downloaded package for manual installation."
+                ),
             )
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
             return
@@ -2025,21 +2030,19 @@ class MainWindow(QMainWindow):
         if path.suffix.lower() == ".dmg":
             QTimer.singleShot(650, self._request_quit)
 
-    def _install_macos_zip_update(self, zip_path: Path) -> bool:
+    def _install_macos_zip_update(self, zip_path: Path) -> tuple[bool, str]:
         if not getattr(sys, "frozen", False):
-            return False
+            return (False, "app is not running from bundled build")
         try:
-            updates_dir = self._updates_cache_dir()
-            updates_dir.mkdir(parents=True, exist_ok=True)
-            staging_dir = Path(tempfile.mkdtemp(prefix="iograph-update-", dir=str(updates_dir)))
+            staging_dir = Path(tempfile.mkdtemp(prefix="iograph-update-"))
             with zipfile.ZipFile(zip_path, "r") as zf:
                 zf.extractall(staging_dir)
             app_candidates = sorted(staging_dir.rglob("*.app"))
             if not app_candidates:
-                return False
+                return (False, "no .app bundle found in update package")
             new_app = app_candidates[0]
             if not self._verify_macos_update_app(new_app):
-                return False
+                return (False, "downloaded app failed signature/team verification")
             target_app = Path("/Applications/IOGraph.app")
             helper_path = staging_dir / "install_update.sh"
             helper_path.write_text(
@@ -2086,9 +2089,9 @@ class MainWindow(QMainWindow):
                 start_new_session=True,
             )
             self._request_quit()
-            return True
-        except Exception:
-            return False
+            return (True, "")
+        except Exception as exc:
+            return (False, str(exc))
 
     @staticmethod
     def _codesign_team_identifier(app_path: Path) -> str:
