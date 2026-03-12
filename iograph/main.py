@@ -117,7 +117,7 @@ class UpdateCheckWorker(QObject):
                     "error": "",
                 }
             )
-        except (HTTPError, URLError, ValueError, TimeoutError, Exception) as exc:
+        except (HTTPError, URLError, ValueError, TimeoutError) as exc:
             self.finished.emit(
                 {
                     "ok": False,
@@ -1730,11 +1730,7 @@ class MainWindow(QMainWindow):
     def _check_for_updates(self, manual: bool) -> None:
         if self._update_check_thread is not None:
             if manual:
-                QMessageBox.information(
-                    self,
-                    "Check for Updates",
-                    "Update check is already running.\nPlease wait a few seconds and try again.",
-                )
+                self._status("Update check is already running")
             return
         include_prerelease = "-" in self._app_version
         thread = QThread(self)
@@ -1930,11 +1926,10 @@ class MainWindow(QMainWindow):
         self._set_update_check_busy(False)
 
     def _set_update_check_busy(self, busy: bool) -> None:
-        # Keep manual check action enabled so user can get explicit "already running" feedback.
-        self._check_updates_action.setEnabled(True)
+        self._check_updates_action.setEnabled(not busy)
         tray_check = getattr(self, "_tray_check_updates_action", None)
         if tray_check is not None:
-            tray_check.setEnabled(True)
+            tray_check.setEnabled(not busy)
         self._update_install_update_actions()
 
     def _update_install_update_actions(self) -> None:
