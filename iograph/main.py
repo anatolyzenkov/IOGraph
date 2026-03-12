@@ -2124,8 +2124,9 @@ class MainWindow(QMainWindow):
             if not app_candidates:
                 return (False, "no .app bundle found in update package")
             new_app = app_candidates[0]
-            if not self._verify_macos_update_app(new_app):
-                return (False, "downloaded app failed signature/team verification")
+            verified, verify_error = self._verify_macos_update_app(new_app)
+            if not verified:
+                return (False, verify_error or "downloaded app failed signature/team verification")
             target_app = Path("/Applications/IOGraph.app")
             helper_path = staging_dir / "install_update.sh"
             helper_path.write_text(
@@ -2193,26 +2194,32 @@ class MainWindow(QMainWindow):
             return ""
         return ""
 
-    def _verify_macos_update_app(self, app_path: Path) -> bool:
+    def _verify_macos_update_app(self, app_path: Path) -> tuple[bool, str]:
         try:
-            subprocess.run(
-                ["codesign", "--verify", "--deep", "--strict", "--verbose=2", str(app_path)],
+            result = subprocess.run(
+                ["codesign", "--verify", "--deep", "--verbose=2", str(app_path)],
                 capture_output=True,
                 text=True,
                 check=True,
             )
-        except Exception:
-            return False
+        except Exception as exc:
+            stderr = ""
+            if isinstance(exc, subprocess.CalledProcessError):
+                stderr = (exc.stderr or "").strip()
+            message = stderr.splitlines()[-1] if stderr else str(exc)
+            return (False, f"signature verification failed ({message})")
         candidate_team = self._codesign_team_identifier(app_path)
         if not candidate_team:
-            return False
+            return (False, "TeamIdentifier not found in downloaded app signature")
         current_app = self._current_macos_app_bundle_path()
         if current_app is None:
-            return True
+            return (True, "")
         current_team = self._codesign_team_identifier(current_app)
         if not current_team:
-            return True
-        return candidate_team == current_team
+            return (True, "")
+        if candidate_team != current_team:
+            return (False, f"team mismatch (downloaded {candidate_team}, current {current_team})")
+        return (True, "")
 
     @staticmethod
     def _current_macos_app_bundle_path() -> Path | None:
