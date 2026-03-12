@@ -8,6 +8,8 @@ import plistlib
 import re
 import shutil
 import subprocess
+import tempfile
+import zipfile
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
@@ -170,13 +172,13 @@ class UpdateCheckWorker(QObject):
                 if not isinstance(asset, dict):
                     continue
                 name = str(asset.get("name", "")).lower()
-                if name.endswith(".dmg"):
+                if name.endswith(".zip") and any(token in name for token in ("mac", "macos", "osx", "darwin")):
                     return asset
             for asset in assets:
                 if not isinstance(asset, dict):
                     continue
                 name = str(asset.get("name", "")).lower()
-                if name.endswith(".zip") and any(token in name for token in ("mac", "macos", "osx", "darwin")):
+                if name.endswith(".dmg"):
                     return asset
             return None
 
@@ -1898,11 +1900,12 @@ class MainWindow(QMainWindow):
             self._settings.setValue("updates/last_auto_downloaded_version", tagged_version)
             self._settings.setValue("updates/last_prompted_version", tagged_version)
         is_zip = self._is_zip_update(local)
-        prompt_message = (
-            "New version of IOGraph is downloaded.\n\nOpen downloaded update package?"
-            if is_zip
-            else "New version of IOGraph is ready to install.\n\nClose and install now?"
-        )
+        if is_zip and sys.platform == "darwin":
+            prompt_message = "New version of IOGraph is ready to install.\n\nClose and install now?"
+        elif is_zip:
+            prompt_message = "New version of IOGraph is downloaded.\n\nOpen downloaded update package?"
+        else:
+            prompt_message = "New version of IOGraph is ready to install.\n\nClose and install now?"
         prompt = QMessageBox.question(
             self,
             "Update Ready",
@@ -1935,7 +1938,9 @@ class MainWindow(QMainWindow):
     def _update_install_update_actions(self) -> None:
         has_file = self._has_pending_downloaded_update()
         downloaded = self._pending_downloaded_update_path()
-        if self._is_zip_update(downloaded):
+        if self._is_zip_update(downloaded) and sys.platform == "darwin":
+            label = "Install Downloaded Update..."
+        elif self._is_zip_update(downloaded):
             label = "Open Update Package"
         else:
             label = "Update now"
@@ -2006,9 +2011,137 @@ class MainWindow(QMainWindow):
             except Exception:
                 QDesktopServices.openUrl(QUrl.fromLocalFile(str(path.parent)))
             return
+        if self._is_zip_update(path) and sys.platform == "darwin":
+            if self._install_macos_zip_update(path):
+                return
+            QMessageBox.warning(
+                self,
+                "Install Downloaded Update",
+                "Automatic install failed. Opening downloaded package for manual installation.",
+            )
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+            return
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
         if path.suffix.lower() == ".dmg":
             QTimer.singleShot(650, self._request_quit)
+
+    def _install_macos_zip_update(self, zip_path: Path) -> bool:
+        if not getattr(sys, "frozen", False):
+            return False
+        try:
+            updates_dir = self._updates_cache_dir()
+            updates_dir.mkdir(parents=True, exist_ok=True)
+            staging_dir = Path(tempfile.mkdtemp(prefix="iograph-update-", dir=str(updates_dir)))
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                zf.extractall(staging_dir)
+            app_candidates = sorted(staging_dir.rglob("*.app"))
+            if not app_candidates:
+                return False
+            new_app = app_candidates[0]
+            if not self._verify_macos_update_app(new_app):
+                return False
+            target_app = Path("/Applications/IOGraph.app")
+            helper_path = staging_dir / "install_update.sh"
+            helper_path.write_text(
+                "\n".join(
+                    [
+                        "#!/bin/bash",
+                        "set -euo pipefail",
+                        'SRC_APP=\"$1\"',
+                        'DST_APP=\"$2\"',
+                        'PID_TO_WAIT=\"$3\"',
+                        'BACKUP_APP=\"${DST_APP}.old\"',
+                        'TMP_APP=\"${DST_APP}.new\"',
+                        "restore_on_error() {",
+                        "  if [[ ! -e \"$DST_APP\" && -e \"$BACKUP_APP\" ]]; then",
+                        "    mv \"$BACKUP_APP\" \"$DST_APP\" || true",
+                        "  fi",
+                        "  open -a \"$DST_APP\" >/dev/null 2>&1 || true",
+                        "}",
+                        "trap restore_on_error ERR",
+                        "for _ in $(seq 1 240); do",
+                        '  if ! kill -0 \"$PID_TO_WAIT\" >/dev/null 2>&1; then',
+                        "    break",
+                        "  fi",
+                        "  sleep 0.25",
+                        "done",
+                        "rm -rf \"$BACKUP_APP\"",
+                        "rm -rf \"$TMP_APP\"",
+                        "ditto \"$SRC_APP\" \"$TMP_APP\"",
+                        "xattr -dr com.apple.quarantine \"$TMP_APP\" >/dev/null 2>&1 || true",
+                        "if [[ -e \"$DST_APP\" ]]; then mv \"$DST_APP\" \"$BACKUP_APP\"; fi",
+                        "mv \"$TMP_APP\" \"$DST_APP\"",
+                        "rm -rf \"$BACKUP_APP\"",
+                        "open -a \"$DST_APP\" >/dev/null 2>&1 || true",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            helper_path.chmod(0o755)
+            subprocess.Popen(
+                ["/bin/bash", str(helper_path), str(new_app), str(target_app), str(os.getpid())],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            self._request_quit()
+            return True
+        except Exception:
+            return False
+
+    @staticmethod
+    def _codesign_team_identifier(app_path: Path) -> str:
+        try:
+            result = subprocess.run(
+                ["codesign", "-dv", "--verbose=4", str(app_path)],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            output = f"{result.stdout}\n{result.stderr}"
+            match = re.search(r"TeamIdentifier=([A-Z0-9]+)", output)
+            if match:
+                return match.group(1)
+        except Exception:
+            return ""
+        return ""
+
+    def _verify_macos_update_app(self, app_path: Path) -> bool:
+        try:
+            subprocess.run(
+                ["codesign", "--verify", "--deep", "--strict", "--verbose=2", str(app_path)],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+        except Exception:
+            return False
+        candidate_team = self._codesign_team_identifier(app_path)
+        if not candidate_team:
+            return False
+        current_app = self._current_macos_app_bundle_path()
+        if current_app is None:
+            return True
+        current_team = self._codesign_team_identifier(current_app)
+        if not current_team:
+            return True
+        return candidate_team == current_team
+
+    @staticmethod
+    def _current_macos_app_bundle_path() -> Path | None:
+        if sys.platform != "darwin":
+            return None
+        if not getattr(sys, "frozen", False):
+            return None
+        try:
+            exe = Path(sys.executable).resolve()
+        except Exception:
+            return None
+        for parent in exe.parents:
+            if parent.suffix.lower() == ".app":
+                return parent
+        return None
 
     def _status(self, _message: str) -> None:
         # Java version has no Qt status bar; keep this as no-op to avoid affecting layout height.

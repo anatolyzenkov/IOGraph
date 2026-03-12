@@ -107,4 +107,15 @@ Ship IOGraph Python + PyQt as production app with stable update flow.
   3. replace app in `/Applications`
   4. relaunch.
 - Add Windows build + installer pipeline and align update UX cross-platform.
+
+## Stable release gate (must pass before `v2.0.0`)
+- `v2.0.0` must not be published until macOS real updater flow is implemented and validated on RC builds.
+- macOS updater policy:
+  - automatic/manual update download should prefer `.zip` app package;
+  - install action must use helper flow: quit app -> replace `/Applications/IOGraph.app` -> relaunch;
+  - `.dmg` remains manual fallback path.
+- macOS update menu/tray labels should reflect state clearly:
+  - `Check for Updates...`
+  - `Check for Updates Automatically`
+  - `Install Downloaded Update...` (only when downloaded artifact exists)
     
