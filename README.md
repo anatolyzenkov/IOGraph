@@ -4,19 +4,16 @@
 
 
 ### Turn your routine work into modern art ###
-IOGraph — is an application that turns mouse movements into modern art. The idea is that you have the program running in the background while doing your usual daily stuff at the computer. Go back to IOGraph after a while and grab a nice picture of what you’ve done! It’s fun, useless and totally free!
+IOGraph is an app that turns your mouse movement into modern art. Keep it running while you work, then come back later and save your result as an image or RAW data.
 
 ### How to do this ###
 1. Run IOGraph. It’s simple application. Just push the round button to start.
 2. Do Your Business. Minimize IOGraph and forget about it for a while.
-3. Do Art. Few hours later you’ll get your own piece of art.
+3. Come back later and save your art.
 
-### How to build it from source code ###
-1. Download IOGraph's source code to your system.
-2. Download and run [Eclipse IDE](https://www.eclipse.org/downloads/).
-3. In Eclipse create new Java project (File > New > Java Project).
-4. Uncheck "Use default location" check box in appeared dialog window.
-5. Choose IOGraph's source code folder as Location and press Finish button.
-6. In the "Package Explorer" panel locate IOGraph.java file (src > com.iographica.core) and right-click on it.
-7. In appeared context menu select "Run as… > Java Application".
-8. After few seconds IOGraphs main window have to be appeared.
+### Save your work ###
+- Save image snapshots of your current graph.
+- Save RAW data to continue or analyze your session later.
+
+### Releases ###
+Download the latest beta/RC builds from the repository Releases page.
