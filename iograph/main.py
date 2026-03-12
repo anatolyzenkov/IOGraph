@@ -292,6 +292,7 @@ class MainWindow(QMainWindow):
     _VERSION_FILE = Path(__file__).resolve().parent.parent / "VERSION"
     _AUTO_UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000
     _UPDATE_BADGE_MAX_IGNORES = 3
+    _UPDATE_STAGING_TTL_SECONDS = 24 * 60 * 60
 
     def __init__(self) -> None:
         super().__init__()
@@ -1706,6 +1707,7 @@ class MainWindow(QMainWindow):
         return v
 
     def _cleanup_downloaded_update_if_installed(self) -> None:
+        self._cleanup_stale_update_temp_files()
         downloaded = self._settings.value("updates/last_downloaded_version", "", str)
         if not downloaded:
             return
@@ -1833,6 +1835,8 @@ class MainWindow(QMainWindow):
         if self._update_download_thread is not None:
             return
         target = self._update_target_path(asset_name, latest_version, manual)
+        self._cleanup_partial_update_files(target.parent, asset_name)
+        self._clear_stale_download_metadata_for(latest_version)
         thread = QThread(self)
         worker = UpdateDownloadWorker(asset_url, str(target))
         worker.moveToThread(thread)
@@ -1871,6 +1875,62 @@ class MainWindow(QMainWindow):
         if appdata:
             return Path(appdata) / "updates"
         return Path.home() / ".iograph" / "updates"
+
+    @staticmethod
+    def _cleanup_partial_update_files(target_dir: Path, asset_name: str) -> None:
+        try:
+            target_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            return
+        stem = Path(asset_name).stem
+        for part in target_dir.glob(f"{stem}*.part"):
+            try:
+                if part.is_file():
+                    part.unlink()
+            except Exception:
+                pass
+
+    def _clear_stale_download_metadata_for(self, latest_version: str) -> None:
+        target_tag = f"v{latest_version}"
+        stored_tag = str(self._settings.value("updates/last_downloaded_version", "", str)).strip()
+        if not stored_tag:
+            return
+        if self._normalize_version_tag(stored_tag) == self._normalize_version_tag(target_tag):
+            return
+        previous_path = str(self._settings.value("updates/last_downloaded_path", "", str)).strip()
+        if previous_path:
+            p = Path(previous_path)
+            try:
+                if p.exists():
+                    p.unlink()
+            except Exception:
+                pass
+        self._settings.remove("updates/last_downloaded_path")
+        self._settings.remove("updates/last_downloaded_version")
+        self._settings.remove("updates/last_auto_downloaded_version")
+        self._settings.remove("updates/last_prompted_version")
+        self._settings.remove("updates/install_ignore_count")
+
+    def _cleanup_stale_update_temp_files(self) -> None:
+        updates_dir = self._updates_cache_dir()
+        if not updates_dir.exists():
+            return
+        now = datetime.now().timestamp()
+        for part in updates_dir.glob("*.part"):
+            try:
+                if part.is_file():
+                    part.unlink()
+            except Exception:
+                pass
+        for staging in updates_dir.glob("iograph-update-*"):
+            try:
+                if not staging.is_dir():
+                    continue
+                age = now - staging.stat().st_mtime
+                if age >= self._UPDATE_STAGING_TTL_SECONDS:
+                    shutil.rmtree(staging, ignore_errors=True)
+            except Exception:
+                pass
 
     @staticmethod
     def _auto_update_cache_name(asset_name: str, latest_version: str) -> str:
