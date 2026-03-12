@@ -40,6 +40,31 @@ Ship IOGraph Python + PyQt as production app with stable update flow.
 - Packaging asset path:
   - `packaging/assets/dmg/IOGraphVolume.icns`.
 
+## Current working state (2026-03-12)
+- Branch/tag status:
+  - `python-port` is current working branch.
+  - Latest pushed RC tag: `v2.0.0-rc.027`.
+- Runtime bug fixes landed:
+  - Fixed tracking timer corruption after `Reset` while tracking in `iograph/tracker.py`.
+  - Added self-heal for corrupted tracking state when `_tracking=True` but `_run_started_mono=None`.
+  - This addresses symptoms: permanent `Just started`, `t=0` raw timeline, lost large idle circles after rerender/toggle.
+- UX/menu state:
+  - Help menu and tray `More` menu both group external links under `Resources`.
+  - Donation prompts are one-time per event:
+    - first image save
+    - first raw data save
+  - Donation links include UTM source labels by entry point.
+- macOS release pipeline:
+  - Release upload uses `gh release` with retries (instead of action-only publish path).
+  - Pipeline now includes Developer ID signing + notarization steps via secrets:
+    - `APPLE_CERT_P12_BASE64`
+    - `APPLE_CERT_PASSWORD`
+    - `APPLE_TEAM_ID`
+    - `APPLE_API_KEY_ID`
+    - `APPLE_API_ISSUER_ID`
+    - `APPLE_API_KEY_P8`
+  - First full validation run expected on `v2.0.0-rc.027`.
+
 ## Version source
 - App version resolution order:
   1. `IOGRAPH_VERSION` env
