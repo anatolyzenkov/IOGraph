@@ -33,6 +33,7 @@ from .core.update_controller import UpdateController
 from .core.session_controller import SessionController
 from .core.session_restore_decisions import SessionRestoreDecisions
 from .core.session_storage import SessionStorage
+from .core.export_controller import ExportController
 from .core.tracking_controller import TrackingController
 from .core.update_storage import UpdateStorageManager
 from .core.update_ui_decisions import UpdateUiDecisions
@@ -568,9 +569,7 @@ class MainWindow(QMainWindow):
         )
         if not path:
             return
-        image_path = Path(path)
-        if image_path.suffix.lower() != ".png":
-            image_path = image_path.with_suffix(".png")
+        image_path = ExportController.ensure_image_path(path)
         self._remember_save_dir(image_path.parent)
         self._start_export_worker(str(image_path))
 
@@ -584,9 +583,7 @@ class MainWindow(QMainWindow):
         )
         if not path:
             return
-        csv_path = Path(path)
-        if csv_path.suffix.lower() != ".csv":
-            csv_path = csv_path.with_suffix(".csv")
+        csv_path = ExportController.ensure_csv_path(path)
         self._remember_save_dir(csv_path.parent)
         csv_path.write_text(self._canvas.export_csv_text(), encoding="utf-8")
         self._status("CSV saved")
