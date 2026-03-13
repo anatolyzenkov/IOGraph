@@ -592,15 +592,14 @@ class MainWindow(QMainWindow):
 
     def _start_export_worker(self, path: str) -> None:
         state = self._canvas.snapshot_export_render_state()
-        thread = QThread(self)
-        worker = ExportRenderWorker(state, path)
-        worker.moveToThread(thread)
-        thread.started.connect(worker.run)
-        worker.finished.connect(self._on_export_finished)
-        worker.finished.connect(thread.quit)
-        worker.finished.connect(worker.deleteLater)
-        thread.finished.connect(thread.deleteLater)
-        thread.finished.connect(self._on_export_thread_closed)
+        thread, worker = ExportController.create_export_worker(
+            self,
+            snapshot_state=state,
+            target_path=path,
+            worker_cls=ExportRenderWorker,
+            on_finished=self._on_export_finished,
+            on_thread_closed=self._on_export_thread_closed,
+        )
         self._export_thread = thread
         self._export_worker = worker
         self._status("Exporting image...")
