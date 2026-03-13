@@ -892,8 +892,7 @@ class MainWindow(QMainWindow):
 
         started_raw = payload.get("session_started_at")
         ended_raw = payload.get("session_ended_at")
-        self._session.restore_from_iso(started_raw, ended_raw)
-        self._session.ensure_started_for_elapsed(self._canvas.get_elapsed_ms())
+        self._tracking_controller.restore_session_from_payload(started_raw, ended_raw, self._canvas.get_elapsed_ms())
 
         if self._canvas.get_elapsed_ms() > 0:
             self._update_timer_label()

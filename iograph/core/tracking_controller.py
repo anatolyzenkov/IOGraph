@@ -71,6 +71,10 @@ class TrackingController(QObject):
         on_clear_session_state()
         self.apply_reset(was_tracking)
 
+    def restore_session_from_payload(self, started_raw, ended_raw, elapsed_ms: int) -> None:
+        self._session.restore_from_iso(started_raw, ended_raw)
+        self._session.ensure_started_for_elapsed(elapsed_ms)
+
     @staticmethod
     def needs_reset_confirmation(elapsed_ms: int) -> bool:
         return elapsed_ms > 0
