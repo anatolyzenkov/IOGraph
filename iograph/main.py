@@ -6,7 +6,7 @@ import plistlib
 import subprocess
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from PyQt6.QtCore import QEvent, QObject, QPoint, QSize, Qt, QThread, QTimer, QUrl, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QEvent, QObject, QSize, Qt, QThread, QTimer, QUrl, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QAction, QColor, QCursor, QDesktopServices, QGuiApplication, QIcon, QImage, QPainter
 from PyQt6.QtWidgets import (
     QApplication,
@@ -37,6 +37,7 @@ from .core.update_ui_decisions import UpdateUiDecisions
 from .core.update_workers import MacZipInstallWorker
 from .services.settings import AppSettings, SettingsKeys
 from .ui.icon_loader import build_app_icon
+from .ui.desktop_snapshot_controller import DesktopSnapshotController
 from .ui.layout_scaffold import build_bottom_scaffold
 from .ui.menu_builder import build_main_menu
 from .ui.panel_icon_logic import heart_icon_name, save_icon_name, setup_icon_name, update_desktop_icon_name
@@ -145,9 +146,6 @@ class MainWindow(QMainWindow):
         self._mac_install_worker: MacZipInstallWorker | None = None
         self._mac_install_progress: QProgressDialog | None = None
         self._mac_install_zip_path: Path | None = None
-        self._pending_snapshot_restore_visible = False
-        self._pending_snapshot_restore_minimized = False
-        self._pending_snapshot_restore_position: QPoint | None = None
         self._app_version = self._resolve_app_version()
         self._setup_auto_hide_timer = QTimer(self)
         self._setup_auto_hide_timer.setSingleShot(True)
@@ -176,6 +174,11 @@ class MainWindow(QMainWindow):
         layout.setSpacing(0)
 
         self._canvas = TrackCanvas(self)
+        self._desktop_snapshot_controller = DesktopSnapshotController(
+            self,
+            capture_desktop_background=self._canvas.update_desktop_background,
+            on_status=self._status,
+        )
         layout.addWidget(self._canvas, stretch=1)
 
         scaffold_refs = build_bottom_scaffold(
@@ -586,40 +589,7 @@ class MainWindow(QMainWindow):
             self._request_preview_rerender()
 
     def _refresh_desktop_snapshot(self) -> None:
-        # Two-phase hide/capture: handles startup case when window becomes visible after scheduling.
-        self._pending_snapshot_restore_visible = self.isVisible()
-        self._pending_snapshot_restore_minimized = self.isMinimized()
-        self._pending_snapshot_restore_position = self.frameGeometry().topLeft()
-        if self._pending_snapshot_restore_visible:
-            self.hide()
-            QApplication.processEvents()
-        QTimer.singleShot(40, self._capture_desktop_snapshot_hidden)
-
-    def _capture_desktop_snapshot_hidden(self) -> None:
-        if self.isVisible():
-            # Startup path: window may become visible after initial scheduling.
-            self._pending_snapshot_restore_visible = True
-            self._pending_snapshot_restore_minimized = self.isMinimized()
-            self._pending_snapshot_restore_position = self.frameGeometry().topLeft()
-            self.hide()
-            QApplication.processEvents()
-            QTimer.singleShot(160, self._capture_desktop_snapshot_final)
-            return
-        QTimer.singleShot(160, self._capture_desktop_snapshot_final)
-
-    def _capture_desktop_snapshot_final(self) -> None:
-        ok = self._canvas.update_desktop_background()
-        if self._pending_snapshot_restore_visible:
-            if self._pending_snapshot_restore_minimized:
-                self.showMinimized()
-            else:
-                self.showNormal()
-                if self._pending_snapshot_restore_position is not None:
-                    self.move(self._pending_snapshot_restore_position)
-                self.raise_()
-                self.activateWindow()
-        self._pending_snapshot_restore_position = None
-        self._status("Desktop snapshot updated" if ok else "Failed to capture desktop snapshot")
+        self._desktop_snapshot_controller.refresh()
 
     def _on_multi_monitor_toggled(self, checked: bool) -> None:
         if self._suppress_option_handlers:
