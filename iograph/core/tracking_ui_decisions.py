@@ -29,6 +29,10 @@ class TrackingUiDecisions:
             reset_button_visible=can_reset,
         )
 
+    @staticmethod
+    def should_show_timer_labels(elapsed_ms: int, tracking: bool) -> bool:
+        return bool(elapsed_ms > 0 or tracking)
+
     @classmethod
     def extend_reset_message_for_long_tracking(cls, base_message: str, elapsed_ms: int) -> str:
         if elapsed_ms <= cls.LONG_TRACKING_CONFIRM_MS:

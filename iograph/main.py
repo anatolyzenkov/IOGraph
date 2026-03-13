@@ -917,13 +917,14 @@ class MainWindow(QMainWindow):
     def _update_timer_label(self) -> None:
         self._refresh_icons_if_system_theme_changed()
         elapsed_ms = self._canvas.get_elapsed_ms()
-        if elapsed_ms <= 0 and not self._canvas.is_tracking():
+        tracking = self._canvas.is_tracking()
+        if not TrackingUiDecisions.should_show_timer_labels(elapsed_ms, tracking):
             return
         self._total_time_label.setText(self._build_tracking_time_text(elapsed_ms))
         self._period_label.setText(self._build_period_label())
         self._total_time_label.setVisible(True)
         self._period_label.setVisible(True)
-        self._reset_btn.setVisible(elapsed_ms > 2000)
+        self._reset_btn.setVisible(TrackingUiDecisions.compute_state(elapsed_ms, tracking).reset_button_visible)
         self._sync_ui_state()
 
     def _build_export_base_name(self) -> str:
