@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from PyQt6.QtCore import QSize
-from PyQt6.QtWidgets import QGraphicsOpacityEffect, QPushButton, QTimer, QWidget
+from PyQt6.QtCore import QSize, QTimer
+from PyQt6.QtWidgets import QGraphicsOpacityEffect, QPushButton, QWidget
 
 
 @dataclass(frozen=True)
