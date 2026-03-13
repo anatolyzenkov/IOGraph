@@ -127,10 +127,10 @@ Ship IOGraph Python + PyQt as production app with stable update flow.
   - [x] Extract update service/workers/storage/controller into `core`.
   - [x] Finish update UI decision extraction (prompt text/action branching).
 - Step 2: Tracking/session extraction
-  - [ ] Move tracking/session orchestration from `main.py` into `core/session_controller.py`.
-  - Progress: session timing + period/time text moved to `core/session_controller.py`; session file/chunk storage moved to `core/session_storage.py`.
-  - [ ] Keep `TrackCanvas` rendering in `ui/tracker` or existing module until behavior parity is verified.
+  - [x] Move tracking/session orchestration from `main.py` into `core/session_controller.py`.
+  - [x] Keep `TrackCanvas` rendering in `ui/tracker` or existing module until behavior parity is verified.
   - [x] Introduce signal-based session events for UI updates.
+  - Note: final behavior parity for start/pause/resume/reset/restore must be confirmed via local manual GUI run.
 - Step 3: Export/render extraction
   - [ ] Move export and preview rerender orchestration into `core/export_controller.py`.
   - [ ] Keep UI-specific progress dialogs in `main.py` (temporary), business logic in `core`.
