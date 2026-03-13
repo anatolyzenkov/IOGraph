@@ -603,11 +603,12 @@ class MainWindow(QMainWindow):
         self._export_thread = thread
         self._export_worker = worker
         self._status("Exporting image...")
-        self._save_btn.setEnabled(False)
-        self._save_image_action.setEnabled(False)
+        export_ui = ExportController.ui_state(export_in_progress=True)
+        self._save_btn.setEnabled(export_ui.can_save_image)
+        self._save_image_action.setEnabled(export_ui.can_save_image)
         tray_save = getattr(self, "_tray_save_image_action", None)
         if tray_save is not None:
-            tray_save.setEnabled(False)
+            tray_save.setEnabled(export_ui.can_save_image)
         thread.start()
 
     def _on_export_finished(self, ok: bool, _path: str) -> None:

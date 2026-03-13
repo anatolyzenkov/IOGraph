@@ -1,8 +1,15 @@
 from __future__ import annotations
 
 from pathlib import Path
+from dataclasses import dataclass
 
 from PyQt6.QtCore import QThread
+
+
+@dataclass(frozen=True)
+class ExportUiState:
+    can_save_image: bool
+
 
 class ExportController:
     @staticmethod
@@ -18,6 +25,10 @@ class ExportController:
         if csv_path.suffix.lower() != ".csv":
             csv_path = csv_path.with_suffix(".csv")
         return csv_path
+
+    @staticmethod
+    def ui_state(export_in_progress: bool) -> ExportUiState:
+        return ExportUiState(can_save_image=not export_in_progress)
 
     @staticmethod
     def create_export_worker(
