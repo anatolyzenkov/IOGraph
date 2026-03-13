@@ -34,7 +34,6 @@ from .core.session_controller import SessionController
 from .core.session_restore_decisions import SessionRestoreDecisions
 from .core.session_storage import SessionStorage
 from .core.tracking_controller import TrackingController
-from .core.tracking_ui_decisions import TrackingUiDecisions
 from .core.update_storage import UpdateStorageManager
 from .core.update_ui_decisions import UpdateUiDecisions
 from .core.update_workers import MacZipInstallWorker
@@ -919,13 +918,13 @@ class MainWindow(QMainWindow):
         self._refresh_icons_if_system_theme_changed()
         elapsed_ms = self._canvas.get_elapsed_ms()
         tracking = self._canvas.is_tracking()
-        if not TrackingUiDecisions.should_show_timer_labels(elapsed_ms, tracking):
+        if not self._tracking_controller.should_show_timer_labels(elapsed_ms, tracking):
             return
         self._total_time_label.setText(SessionController.tracking_time_text(elapsed_ms))
         self._period_label.setText(self._session.period_label())
         self._total_time_label.setVisible(True)
         self._period_label.setVisible(True)
-        self._reset_btn.setVisible(TrackingUiDecisions.compute_state(elapsed_ms, tracking).reset_button_visible)
+        self._reset_btn.setVisible(self._tracking_controller.ui_state(elapsed_ms, tracking).reset_button_visible)
         self._sync_ui_state()
 
     def _build_export_base_name(self) -> str:
@@ -1692,7 +1691,7 @@ class MainWindow(QMainWindow):
             return
         elapsed = self._canvas.get_elapsed_ms()
         tracking = self._canvas.is_tracking()
-        ui_state = TrackingUiDecisions.compute_state(elapsed, tracking)
+        ui_state = self._tracking_controller.ui_state(elapsed, tracking)
         self._tray_toggle_action.setText(ui_state.toggle_label)
         self._tray_save_image_action.setEnabled(ui_state.can_save)
         self._tray_save_csv_action.setEnabled(ui_state.can_save)
@@ -1703,7 +1702,7 @@ class MainWindow(QMainWindow):
     def _sync_ui_state(self) -> None:
         elapsed = self._canvas.get_elapsed_ms()
         tracking = self._canvas.is_tracking()
-        ui_state = TrackingUiDecisions.compute_state(elapsed, tracking)
+        ui_state = self._tracking_controller.ui_state(elapsed, tracking)
 
         self._toggle_btn.setChecked(tracking)
         self._update_toggle_icon()

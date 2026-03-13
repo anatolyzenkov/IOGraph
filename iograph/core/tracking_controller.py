@@ -6,7 +6,7 @@ from collections.abc import Callable
 from PyQt6.QtCore import QObject, pyqtSignal
 
 from .session_controller import SessionController
-from .tracking_ui_decisions import TrackingUiDecisions
+from .tracking_ui_decisions import TrackingUiDecisions, TrackingUiState
 
 
 @dataclass(frozen=True)
@@ -80,6 +80,14 @@ class TrackingController(QObject):
     def restore_session_from_payload(self, started_raw, ended_raw, elapsed_ms: int) -> None:
         self._session.restore_from_iso(started_raw, ended_raw)
         self._session.ensure_started_for_elapsed(elapsed_ms)
+
+    @staticmethod
+    def ui_state(elapsed_ms: int, tracking: bool) -> TrackingUiState:
+        return TrackingUiDecisions.compute_state(elapsed_ms, tracking)
+
+    @staticmethod
+    def should_show_timer_labels(elapsed_ms: int, tracking: bool) -> bool:
+        return TrackingUiDecisions.should_show_timer_labels(elapsed_ms, tracking)
 
     @staticmethod
     def needs_reset_confirmation(elapsed_ms: int) -> bool:
