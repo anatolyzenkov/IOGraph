@@ -699,21 +699,18 @@ class MainWindow(QMainWindow):
         self._toggle_btn.setVisible(False)
         self._preview_request_seq += 1
         state = self._canvas.snapshot_preview_render_state()
-        thread = QThread(self)
         request_id = self._preview_request_seq
         self._preview_active_request_id = request_id
-        worker = PreviewRenderWorker(request_id, state)
-        worker.moveToThread(thread)
-        thread.started.connect(worker.run)
-        worker.progress.connect(self._on_preview_rerender_progress)
-        worker.finished.connect(self._on_preview_rerender_ready)
-        worker.finished.connect(thread.quit)
-        worker.finished.connect(worker.deleteLater)
-        worker.failed.connect(self._on_preview_rerender_failed)
-        worker.failed.connect(thread.quit)
-        worker.failed.connect(worker.deleteLater)
-        thread.finished.connect(thread.deleteLater)
-        thread.finished.connect(self._on_preview_thread_closed)
+        thread, worker = ExportController.create_preview_worker(
+            self,
+            request_id=request_id,
+            snapshot_state=state,
+            worker_cls=PreviewRenderWorker,
+            on_progress=self._on_preview_rerender_progress,
+            on_finished=self._on_preview_rerender_ready,
+            on_failed=self._on_preview_rerender_failed,
+            on_thread_closed=self._on_preview_thread_closed,
+        )
         self._preview_render_thread = thread
         self._preview_render_worker = worker
         self._status("Rendering preview...")

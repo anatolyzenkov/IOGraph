@@ -39,3 +39,30 @@ class ExportController:
         thread.finished.connect(thread.deleteLater)
         thread.finished.connect(on_thread_closed)
         return (thread, worker)
+
+    @staticmethod
+    def create_preview_worker(
+        parent,
+        *,
+        request_id: int,
+        snapshot_state: dict,
+        worker_cls,
+        on_progress,
+        on_finished,
+        on_failed,
+        on_thread_closed,
+    ) -> tuple[QThread, object]:
+        thread = QThread(parent)
+        worker = worker_cls(request_id, snapshot_state)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.progress.connect(on_progress)
+        worker.finished.connect(on_finished)
+        worker.finished.connect(thread.quit)
+        worker.finished.connect(worker.deleteLater)
+        worker.failed.connect(on_failed)
+        worker.failed.connect(thread.quit)
+        worker.failed.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+        thread.finished.connect(on_thread_closed)
+        return (thread, worker)
