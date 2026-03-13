@@ -839,22 +839,10 @@ class MainWindow(QMainWindow):
             sync=True,
         )
 
-    def _session_state_path(self) -> Path:
-        return self._session_storage.session_state_path()
-
-    def _preview_cache_path(self) -> Path:
-        return self._session_storage.preview_cache_path()
-
-    def _desktop_cache_path(self) -> Path:
-        return self._session_storage.desktop_cache_path()
-
-    def _raw_chunks_dir(self) -> Path:
-        return self._session_storage.raw_chunks_dir()
-
     def _save_session_state(self) -> None:
         signature = self._canvas.render_cache_signature()
-        preview_saved = self._canvas.export_preview_cache(str(self._preview_cache_path()))
-        desktop_saved = self._canvas.export_desktop_background_cache(str(self._desktop_cache_path()))
+        preview_saved = self._canvas.export_preview_cache(str(self._session_storage.preview_cache_path()))
+        desktop_saved = self._canvas.export_desktop_background_cache(str(self._session_storage.desktop_cache_path()))
         raw_storage = self._session_storage.write_raw_chunks(self._canvas.export_raw_samples())
         state = {
             "version": 1,
@@ -882,9 +870,11 @@ class MainWindow(QMainWindow):
         if raw_samples:
             self._canvas.load_raw_samples(raw_samples, rebuild=False)
         if use_cache and payload.get("preview_cache_saved", False):
-            loaded_preview_cache = self._canvas.load_preview_cache(str(self._preview_cache_path()))
+            loaded_preview_cache = self._canvas.load_preview_cache(str(self._session_storage.preview_cache_path()))
         if use_cache and self._use_desktop_action.isChecked() and payload.get("desktop_cache_saved", False):
-            loaded_desktop_cache = self._canvas.load_desktop_background_cache(str(self._desktop_cache_path()))
+            loaded_desktop_cache = self._canvas.load_desktop_background_cache(
+                str(self._session_storage.desktop_cache_path())
+            )
         if not loaded_preview_cache:
             self._request_preview_rerender()
         if self._use_desktop_action.isChecked() and not loaded_desktop_cache:
