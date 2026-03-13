@@ -75,6 +75,15 @@ class SessionController(QObject):
         full_date_treatment = started.day != ended.day or started.month != ended.month
         return f"From {self._date_pattern(started, full_date_treatment)} to {self._date_pattern(ended, full_date_treatment)}"
 
+    def export_base_name(self, elapsed_ms: int, app_name: str = "IOGraphica") -> str:
+        time_label = self.tracking_time_text(elapsed_ms)
+        period = self.period_label()
+        if not period:
+            return f"{app_name} - {time_label}"
+        period_for_file = period.replace(":", "-")
+        period_for_file = period_for_file[0].lower() + period_for_file[1:]
+        return f"{app_name} - {time_label} ({period_for_file})"
+
     @classmethod
     def tracking_time_text(cls, ms: int) -> str:
         if ms < 1000:

@@ -928,13 +928,7 @@ class MainWindow(QMainWindow):
         self._sync_ui_state()
 
     def _build_export_base_name(self) -> str:
-        time_label = self._build_tracking_time_text(self._canvas.get_elapsed_ms())
-        period = self._build_period_label()
-        if not period:
-            return f"IOGraphica - {time_label}"
-        period_for_file = period.replace(":", "-")
-        period_for_file = period_for_file[0].lower() + period_for_file[1:]
-        return f"IOGraphica - {time_label} ({period_for_file})"
+        return self._session.export_base_name(self._canvas.get_elapsed_ms(), app_name="IOGraphica")
 
     def _set_tracking(self, enabled: bool) -> None:
         transition = self._tracking_controller.set_tracking_with_callbacks(
