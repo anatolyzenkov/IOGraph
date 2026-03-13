@@ -16,7 +16,6 @@ from PyQt6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
-    QMenu,
     QMainWindow,
     QMessageBox,
     QProgressDialog,
@@ -40,6 +39,7 @@ from .core.update_ui_decisions import UpdateUiDecisions
 from .core.update_workers import MacZipInstallWorker
 from .services.settings import AppSettings, SettingsKeys
 from .ui.icon_loader import build_app_icon
+from .ui.tray_menu import build_tray_menu
 
 _windows_single_instance_lock: QLockFile | None = None
 
@@ -463,43 +463,35 @@ class MainWindow(QMainWindow):
             return
         self._tray_icon = QSystemTrayIcon(self)
         self._tray_icon.setIcon(self._tray_state_icon(tracking=False))
-        tray_menu = QMenu(self)
-        self._tray_install_update_action = tray_menu.addAction("Update now")
-        self._tray_install_update_action.triggered.connect(self._open_downloaded_update)
-        self._tray_update_sep_action = tray_menu.addSeparator()
-        self._tray_toggle_action = tray_menu.addAction("Start")
-        self._tray_toggle_action.triggered.connect(lambda: self._set_tracking(not self._canvas.is_tracking()))
-        self._tray_reset_action = tray_menu.addAction("Reset")
-        self._tray_reset_action.triggered.connect(self._reset_canvas)
-        self._tray_reset_action.setEnabled(False)
-        tray_menu.addSeparator()
-        self._tray_save_image_action = tray_menu.addAction("Save Image...")
-        self._tray_save_image_action.triggered.connect(self._save_image)
-        self._tray_save_image_action.setEnabled(False)
-        self._tray_save_csv_action = tray_menu.addAction("Save Raw Data...")
-        self._tray_save_csv_action.triggered.connect(self._save_csv)
-        self._tray_save_csv_action.setEnabled(False)
-        tray_menu.addSeparator()
-        self._tray_settings_action = tray_menu.addAction("Show Settings")
-        self._tray_settings_action.triggered.connect(self._toggle_settings_from_tray)
-        more_menu = tray_menu.addMenu("More")
-        self._tray_check_updates_action = more_menu.addAction("Check for Updates")
-        self._tray_check_updates_action.triggered.connect(lambda: self._check_for_updates(manual=True))
-        self._tray_auto_update_action = more_menu.addAction("Check for Updates Automatically")
-        self._tray_auto_update_action.setCheckable(True)
-        self._tray_auto_update_action.toggled.connect(self._on_auto_update_toggled)
-        more_menu.addSeparator()
-        links_menu = more_menu.addMenu("Resources")
-        links_menu.addAction("About IOGraphica", lambda: self._open_url(self._ABOUT_IOGRAPHICA_URL))
-        links_menu.addAction("IOGraph Website", lambda: self._open_url(self._WEBSITE_URL))
-        links_menu.addAction("Get Source Code", lambda: self._open_url(self._GITHUB_URL))
-        links_menu.addAction("Support IOGraphica", lambda: self._open_support_url("tray_menu_support"))
-        more_menu.addSeparator()
-        more_menu.addAction("About IOGraph", self._show_about_dialog)
-        tray_menu.addSeparator()
         tray_exit_label = "Exit" if sys.platform.startswith("win") else "Quit"
-        tray_menu.addAction(tray_exit_label, self._request_quit)
-        self._tray_icon.setContextMenu(tray_menu)
+        refs = build_tray_menu(
+            self,
+            tray_exit_label=tray_exit_label,
+            on_open_downloaded_update=self._open_downloaded_update,
+            on_toggle_tracking=lambda: self._set_tracking(not self._canvas.is_tracking()),
+            on_reset=self._reset_canvas,
+            on_save_image=self._save_image,
+            on_save_csv=self._save_csv,
+            on_toggle_settings=self._toggle_settings_from_tray,
+            on_check_updates=lambda: self._check_for_updates(manual=True),
+            on_auto_update_toggled=self._on_auto_update_toggled,
+            on_open_about_iographica=lambda: self._open_url(self._ABOUT_IOGRAPHICA_URL),
+            on_open_website=lambda: self._open_url(self._WEBSITE_URL),
+            on_open_source=lambda: self._open_url(self._GITHUB_URL),
+            on_open_support=lambda: self._open_support_url("tray_menu_support"),
+            on_about=self._show_about_dialog,
+            on_quit=self._request_quit,
+        )
+        self._tray_install_update_action = refs.install_update_action
+        self._tray_update_sep_action = refs.update_separator_action
+        self._tray_toggle_action = refs.toggle_action
+        self._tray_reset_action = refs.reset_action
+        self._tray_save_image_action = refs.save_image_action
+        self._tray_save_csv_action = refs.save_csv_action
+        self._tray_settings_action = refs.settings_action
+        self._tray_check_updates_action = refs.check_updates_action
+        self._tray_auto_update_action = refs.auto_update_action
+        self._tray_icon.setContextMenu(refs.menu)
         self._tray_icon.activated.connect(self._on_tray_activated)
         self._tray_icon.show()
         self._set_auto_update_state(self._auto_update_action.isChecked())
