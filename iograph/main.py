@@ -31,6 +31,7 @@ from .tracker import TrackCanvas
 from .app.signals import AppSignals
 from .core.update_controller import UpdateController
 from .core.session_controller import SessionController
+from .core.session_restore_decisions import SessionRestoreDecisions
 from .core.session_storage import SessionStorage
 from .core.tracking_controller import TrackingController
 from .core.tracking_ui_decisions import TrackingUiDecisions
@@ -865,19 +866,20 @@ class MainWindow(QMainWindow):
         raw_samples = self._session_storage.read_raw_samples(payload)
         signature = payload.get("render_signature")
         use_cache = signature == self._canvas.render_cache_signature()
+        use_desktop_bg = self._use_desktop_action.isChecked()
         loaded_preview_cache = False
         loaded_desktop_cache = False
         if raw_samples:
             self._canvas.load_raw_samples(raw_samples, rebuild=False)
-        if use_cache and payload.get("preview_cache_saved", False):
+        if SessionRestoreDecisions.should_try_preview_cache(payload, use_cache):
             loaded_preview_cache = self._canvas.load_preview_cache(str(self._session_storage.preview_cache_path()))
-        if use_cache and self._use_desktop_action.isChecked() and payload.get("desktop_cache_saved", False):
+        if SessionRestoreDecisions.should_try_desktop_cache(payload, use_cache, use_desktop_bg):
             loaded_desktop_cache = self._canvas.load_desktop_background_cache(
                 str(self._session_storage.desktop_cache_path())
             )
-        if not loaded_preview_cache:
+        if SessionRestoreDecisions.needs_preview_rerender(loaded_preview_cache):
             self._request_preview_rerender()
-        if self._use_desktop_action.isChecked() and not loaded_desktop_cache:
+        if SessionRestoreDecisions.needs_desktop_refresh(use_desktop_bg, loaded_desktop_cache):
             self._refresh_desktop_snapshot()
 
         started_raw = payload.get("session_started_at")
