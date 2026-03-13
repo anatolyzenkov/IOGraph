@@ -47,6 +47,7 @@ from .ui.support_prompt import show_support_prompt
 from .ui.toggle_button import build_toggle_button
 from .ui.tray_menu import build_tray_menu
 from .ui.tray_window import show_window_on_top, tray_settings_label
+from .ui.update_actions import sync_install_update_actions
 
 class PreviewRenderWorker(QObject):
     progress = pyqtSignal(int, object, float)  # request_id, QImage, pixel_scale
@@ -1292,19 +1293,13 @@ class MainWindow(QMainWindow):
     def _update_install_update_actions(self) -> None:
         has_file = self._has_pending_downloaded_update()
         downloaded = self._pending_downloaded_update_path()
-        label = UpdateUiDecisions.install_action_label(downloaded)
-        action = getattr(self, "_install_downloaded_update_action", None)
-        if action is not None:
-            action.setText(label)
-            action.setEnabled(has_file)
-        tray_action = getattr(self, "_tray_install_update_action", None)
-        if tray_action is not None:
-            tray_action.setText(label)
-            tray_action.setEnabled(has_file)
-            tray_action.setVisible(has_file)
-        tray_sep = getattr(self, "_tray_update_sep_action", None)
-        if tray_sep is not None:
-            tray_sep.setVisible(has_file)
+        sync_install_update_actions(
+            has_downloaded_update=has_file,
+            downloaded_path=downloaded,
+            menu_action=getattr(self, "_install_downloaded_update_action", None),
+            tray_action=getattr(self, "_tray_install_update_action", None),
+            tray_separator_action=getattr(self, "_tray_update_sep_action", None),
+        )
         self._update_tray_state()
 
     def _has_pending_downloaded_update(self) -> bool:
