@@ -6,7 +6,7 @@ import plistlib
 import subprocess
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from PyQt6.QtCore import QEvent, QLockFile, QObject, QSize, Qt, QThread, QTimer, QStandardPaths, QUrl, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QEvent, QLockFile, QObject, QPoint, QSize, Qt, QThread, QTimer, QStandardPaths, QUrl, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QAction, QColor, QCursor, QDesktopServices, QGuiApplication, QIcon, QImage, QPainter
 from PyQt6.QtWidgets import (
     QApplication,
@@ -146,6 +146,7 @@ class MainWindow(QMainWindow):
         self._mac_install_zip_path: Path | None = None
         self._pending_snapshot_restore_visible = False
         self._pending_snapshot_restore_minimized = False
+        self._pending_snapshot_restore_position: QPoint | None = None
         self._app_version = self._resolve_app_version()
         self._setup_auto_hide_timer = QTimer(self)
         self._setup_auto_hide_timer.setSingleShot(True)
@@ -587,6 +588,7 @@ class MainWindow(QMainWindow):
         # Two-phase hide/capture: handles startup case when window becomes visible after scheduling.
         self._pending_snapshot_restore_visible = self.isVisible()
         self._pending_snapshot_restore_minimized = self.isMinimized()
+        self._pending_snapshot_restore_position = self.frameGeometry().topLeft()
         if self._pending_snapshot_restore_visible:
             self.hide()
             QApplication.processEvents()
@@ -597,6 +599,7 @@ class MainWindow(QMainWindow):
             # Startup path: window may become visible after initial scheduling.
             self._pending_snapshot_restore_visible = True
             self._pending_snapshot_restore_minimized = self.isMinimized()
+            self._pending_snapshot_restore_position = self.frameGeometry().topLeft()
             self.hide()
             QApplication.processEvents()
             QTimer.singleShot(160, self._capture_desktop_snapshot_final)
@@ -610,8 +613,11 @@ class MainWindow(QMainWindow):
                 self.showMinimized()
             else:
                 self.showNormal()
+                if self._pending_snapshot_restore_position is not None:
+                    self.move(self._pending_snapshot_restore_position)
                 self.raise_()
                 self.activateWindow()
+        self._pending_snapshot_restore_position = None
         self._status("Desktop snapshot updated" if ok else "Failed to capture desktop snapshot")
 
     def _on_multi_monitor_toggled(self, checked: bool) -> None:
