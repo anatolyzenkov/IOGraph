@@ -40,6 +40,7 @@ from .core.update_workers import MacZipInstallWorker
 from .services.settings import AppSettings, SettingsKeys
 from .ui.icon_loader import build_app_icon
 from .ui.menu_builder import build_main_menu
+from .ui.support_prompt import show_support_prompt
 from .ui.tray_menu import build_tray_menu
 
 _windows_single_instance_lock: QLockFile | None = None
@@ -573,17 +574,7 @@ class MainWindow(QMainWindow):
         if self._settings.value(key, False, bool):
             return
         self._persist_option(key, True)
-
-        box = QMessageBox(self)
-        box.setIcon(QMessageBox.Icon.Information)
-        box.setWindowTitle(title)
-        box.setText(text)
-        box.setInformativeText(informative_text)
-        box.addButton("Maybe later", QMessageBox.ButtonRole.RejectRole)
-        support_btn = box.addButton("Support the project", QMessageBox.ButtonRole.AcceptRole)
-        box.setDefaultButton(support_btn)
-        box.exec()
-        if box.clickedButton() == support_btn:
+        if show_support_prompt(self, title=title, text=text, informative_text=informative_text):
             self._open_support_url(source)
 
     def _on_export_thread_closed(self) -> None:
