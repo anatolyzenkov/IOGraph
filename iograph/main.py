@@ -12,7 +12,6 @@ from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
     QFileDialog,
-    QGraphicsOpacityEffect,
     QMainWindow,
     QMessageBox,
     QProgressDialog,
@@ -41,6 +40,7 @@ from .ui.menu_builder import build_main_menu
 from .ui.panel_widgets import build_front_panel, build_secondary_panel
 from .ui.settings_panel import build_settings_panel
 from .ui.support_prompt import show_support_prompt
+from .ui.toggle_button import build_toggle_button
 from .ui.tray_menu import build_tray_menu
 
 _windows_single_instance_lock: QLockFile | None = None
@@ -188,24 +188,18 @@ class MainWindow(QMainWindow):
         self._front_panel = scaffold_refs.front_panel
         self._control_panel = scaffold_refs.control_panel
 
-        self._toggle_btn = QPushButton(self._canvas)
-        self._toggle_btn.setCheckable(True)
-        self._toggle_btn.setFixedSize(88, 88)
-        self._toggle_btn.setIconSize(QSize(88, 88))
-        self._toggle_btn.setFlat(True)
-        self._toggle_btn.setStyleSheet("QPushButton { border: none; background: transparent; }")
-        self._toggle_btn.clicked.connect(self._on_toggle_clicked)
+        toggle_refs = build_toggle_button(
+            self._canvas,
+            on_clicked=self._on_toggle_clicked,
+            on_fade_tick=self._animate_toggle_opacity,
+        )
+        self._toggle_btn = toggle_refs.button
         self._canvas.installEventFilter(self)
         self._update_toggle_icon()
         self._toggle_hover = False
         self._toggle_opacity = 1.0
-        self._toggle_opacity_effect = QGraphicsOpacityEffect(self._toggle_btn)
-        self._toggle_opacity_effect.setOpacity(self._toggle_opacity)
-        self._toggle_btn.setGraphicsEffect(self._toggle_opacity_effect)
-        self._toggle_fade_timer = QTimer(self)
-        self._toggle_fade_timer.setInterval(33)
-        self._toggle_fade_timer.timeout.connect(self._animate_toggle_opacity)
-        self._toggle_fade_timer.start()
+        self._toggle_opacity_effect = toggle_refs.opacity_effect
+        self._toggle_fade_timer = toggle_refs.fade_timer
 
         front_refs = build_front_panel(
             self._front_panel,
