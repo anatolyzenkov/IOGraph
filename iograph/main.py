@@ -532,9 +532,11 @@ class MainWindow(QMainWindow):
 
     def _perform_reset(self) -> None:
         is_tracking = self._canvas.is_tracking()
-        self._canvas.reset()
-        self._clear_session_state()
-        self._tracking_controller.apply_reset(is_tracking)
+        self._tracking_controller.apply_reset_with_callbacks(
+            is_tracking,
+            on_canvas_reset=self._canvas.reset,
+            on_clear_session_state=self._clear_session_state,
+        )
         self._total_time_label.setText("Total Time")
         self._period_label.setText("Time Period")
         self._total_time_label.setVisible(False)
@@ -934,13 +936,12 @@ class MainWindow(QMainWindow):
         return f"IOGraphica - {time_label} ({period_for_file})"
 
     def _set_tracking(self, enabled: bool) -> None:
-        transition = self._tracking_controller.set_tracking(enabled)
-        if transition.enabled:
-            self._canvas.start_tracking()
-            self._toggle_btn.setChecked(True)
-        else:
-            self._canvas.stop_tracking()
-            self._toggle_btn.setChecked(False)
+        transition = self._tracking_controller.set_tracking_with_callbacks(
+            enabled,
+            on_canvas_start=self._canvas.start_tracking,
+            on_canvas_stop=self._canvas.stop_tracking,
+        )
+        self._toggle_btn.setChecked(transition.enabled)
         self._sync_ui_state()
         self._status(transition.status_message)
 
