@@ -6,7 +6,7 @@ import plistlib
 import subprocess
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from PyQt6.QtCore import QEvent, QLockFile, QObject, QPoint, QSize, Qt, QThread, QTimer, QStandardPaths, QUrl, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QEvent, QObject, QPoint, QSize, Qt, QThread, QTimer, QUrl, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QAction, QColor, QCursor, QDesktopServices, QGuiApplication, QIcon, QImage, QPainter
 from PyQt6.QtWidgets import (
     QApplication,
@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
 import sys
 
 from .tracker import TrackCanvas
+from .app.bootstrap import run_app
 from .app.signals import AppSignals
 from .core.update_controller import UpdateController
 from .core.session_controller import SessionController
@@ -42,9 +43,6 @@ from .ui.settings_panel import build_settings_panel
 from .ui.support_prompt import show_support_prompt
 from .ui.toggle_button import build_toggle_button
 from .ui.tray_menu import build_tray_menu
-
-_windows_single_instance_lock: QLockFile | None = None
-
 
 class PreviewRenderWorker(QObject):
     progress = pyqtSignal(int, object, float)  # request_id, QImage, pixel_scale
@@ -1555,25 +1553,7 @@ class MainWindow(QMainWindow):
 
 
 def main() -> None:
-    if sys.platform.startswith("win"):
-        QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
-    app = QApplication(sys.argv)
-    if sys.platform.startswith("win"):
-        global _windows_single_instance_lock
-        lock_root = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppLocalDataLocation)
-        if not lock_root:
-            lock_root = str(Path.home() / ".iograph")
-        lock_dir = Path(lock_root)
-        lock_dir.mkdir(parents=True, exist_ok=True)
-        lock = QLockFile(str(lock_dir / "iograph-single-instance.lock"))
-        lock.setStaleLockTime(0)
-        if not lock.tryLock(0):
-            QMessageBox.information(None, "IOGraph", "IOGraph is already running.")
-            return
-        _windows_single_instance_lock = lock
-    window = MainWindow()
-    window.show()
-    sys.exit(app.exec())
+    sys.exit(run_app(MainWindow))
 
 
 if __name__ == "__main__":
