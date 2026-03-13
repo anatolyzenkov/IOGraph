@@ -38,6 +38,7 @@ from .services.settings import AppSettings, SettingsKeys
 from .ui.icon_loader import build_app_icon
 from .ui.layout_scaffold import build_bottom_scaffold
 from .ui.menu_builder import build_main_menu
+from .ui.panel_icon_logic import heart_icon_name, save_icon_name, setup_icon_name, update_desktop_icon_name
 from .ui.panel_widgets import build_front_panel, build_secondary_panel
 from .ui.settings_panel import build_settings_panel
 from .ui.support_prompt import show_support_prompt
@@ -777,7 +778,7 @@ class MainWindow(QMainWindow):
     def _toggle_setup_panel(self, checked: bool) -> None:
         self._panel_anim_direction = 1 if checked else -1
         self._panel_anim_timer.start()
-        self._setup_btn.setIcon(self._icon("SetupBtnC.png" if checked else "SetupBtn.png"))
+        self._setup_btn.setIcon(self._icon(setup_icon_name(checked=checked, pressed=False)))
         self._update_tray_state()
 
     def _apply_window_geometry(self) -> None:
@@ -850,48 +851,52 @@ class MainWindow(QMainWindow):
         self._toggle_hover = dx * dx + dy * dy < 40 * 40
 
     def _update_save_icon(self) -> None:
-        if not self._save_btn.isEnabled():
-            self._save_btn.setIcon(self._icon("SaveDisabledBtn.png"))
-            return
-        self._save_btn.setIcon(self._icon("SaveBtn.png"))
+        self._save_btn.setIcon(
+            self._icon(save_icon_name(enabled=self._save_btn.isEnabled(), pressed=self._save_btn.isDown()))
+        )
 
     def _on_save_pressed(self) -> None:
-        if self._save_btn.isEnabled():
-            self._save_btn.setIcon(self._icon("SavePressedBtn.png"))
+        self._save_btn.setIcon(self._icon(save_icon_name(enabled=self._save_btn.isEnabled(), pressed=True)))
 
     def _on_save_released(self) -> None:
         self._update_save_icon()
 
     def _on_setup_pressed(self) -> None:
-        self._setup_btn.setIcon(self._icon("SetupPressedBtnC.png" if self._setup_btn.isChecked() else "SetupPressedBtn.png"))
+        self._setup_btn.setIcon(
+            self._icon(setup_icon_name(checked=self._setup_btn.isChecked(), pressed=True))
+        )
 
     def _on_setup_released(self) -> None:
-        self._setup_btn.setIcon(self._icon("SetupBtnC.png" if self._setup_btn.isChecked() else "SetupBtn.png"))
+        self._setup_btn.setIcon(
+            self._icon(setup_icon_name(checked=self._setup_btn.isChecked(), pressed=False))
+        )
 
     def _on_update_desktop_pressed(self) -> None:
-        if self._update_desktop_btn.isEnabled():
-            self._update_desktop_btn.setIcon(self._icon("UpdateDesktopPressedBtn.png"))
+        self._update_desktop_btn.setIcon(
+            self._icon(update_desktop_icon_name(enabled=self._update_desktop_btn.isEnabled(), pressed=True))
+        )
 
     def _on_update_desktop_released(self) -> None:
         self._update_update_desktop_icon()
 
     def _update_update_desktop_icon(self) -> None:
-        if not self._update_desktop_btn.isEnabled():
-            self._update_desktop_btn.setIcon(self._icon("UpdateDesktopDisabledBtn.png"))
-            return
-        self._update_desktop_btn.setIcon(self._icon("UpdateDesktopBtn.png"))
+        self._update_desktop_btn.setIcon(
+            self._icon(
+                update_desktop_icon_name(
+                    enabled=self._update_desktop_btn.isEnabled(),
+                    pressed=self._update_desktop_btn.isDown(),
+                )
+            )
+        )
 
     def _on_url_pressed(self) -> None:
-        self._url_btn.setIcon(self._heart_icon("HeartPressedBtn.png"))
+        self._url_btn.setIcon(self._heart_icon(heart_icon_name(pressed=True)))
 
     def _on_url_released(self) -> None:
         self._update_url_icon()
 
     def _update_url_icon(self) -> None:
-        if self._url_btn.isDown():
-            self._url_btn.setIcon(self._heart_icon("HeartPressedBtn.png"))
-            return
-        self._url_btn.setIcon(self._heart_icon("HeartBtn.png"))
+        self._url_btn.setIcon(self._heart_icon(heart_icon_name(pressed=self._url_btn.isDown())))
 
     def _heart_icon(self, name: str) -> QIcon:
         # Donation icon should stay visually stable across system palette changes.
