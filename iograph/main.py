@@ -920,8 +920,8 @@ class MainWindow(QMainWindow):
         tracking = self._canvas.is_tracking()
         if not self._tracking_controller.should_show_timer_labels(elapsed_ms, tracking):
             return
-        self._total_time_label.setText(SessionController.tracking_time_text(elapsed_ms))
-        self._period_label.setText(self._session.period_label())
+        self._total_time_label.setText(self._tracking_controller.tracking_time_text(elapsed_ms))
+        self._period_label.setText(self._tracking_controller.period_label())
         self._total_time_label.setVisible(True)
         self._period_label.setVisible(True)
         self._reset_btn.setVisible(self._tracking_controller.ui_state(elapsed_ms, tracking).reset_button_visible)

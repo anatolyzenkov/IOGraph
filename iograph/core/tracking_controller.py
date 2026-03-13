@@ -89,6 +89,12 @@ class TrackingController(QObject):
     def should_show_timer_labels(elapsed_ms: int, tracking: bool) -> bool:
         return TrackingUiDecisions.should_show_timer_labels(elapsed_ms, tracking)
 
+    def tracking_time_text(self, elapsed_ms: int) -> str:
+        return SessionController.tracking_time_text(elapsed_ms)
+
+    def period_label(self) -> str:
+        return self._session.period_label()
+
     @staticmethod
     def needs_reset_confirmation(elapsed_ms: int) -> bool:
         return elapsed_ms > 0
