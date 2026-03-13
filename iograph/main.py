@@ -39,6 +39,7 @@ from .core.update_ui_decisions import UpdateUiDecisions
 from .core.update_workers import MacZipInstallWorker
 from .services.settings import AppSettings, SettingsKeys
 from .ui.icon_loader import build_app_icon
+from .ui.menu_builder import build_main_menu
 from .ui.tray_menu import build_tray_menu
 
 _windows_single_instance_lock: QLockFile | None = None
@@ -362,100 +363,40 @@ class MainWindow(QMainWindow):
         self._status("Ready")
 
     def _setup_actions(self) -> None:
-        file_menu = self.menuBar().addMenu("&File")
-        tracking_menu = self.menuBar().addMenu("&Tracking")
-        options_menu = self.menuBar().addMenu("&Options")
-        help_menu = self.menuBar().addMenu("&Help")
-
-        self._save_image_action = QAction("Save &Image...", self)
-        self._save_image_action.setShortcut("Ctrl+S")
-        self._save_image_action.triggered.connect(self._save_image)
-        file_menu.addAction(self._save_image_action)
-
-        self._save_csv_action = QAction("Save &Raw Data...", self)
-        self._save_csv_action.setShortcut("Ctrl+Shift+S")
-        self._save_csv_action.triggered.connect(self._save_csv)
-        file_menu.addAction(self._save_csv_action)
-
-        self._reset_action = QAction("&Reset", self)
-        self._reset_action.setShortcut("Ctrl+R")
-        self._reset_action.triggered.connect(self._reset_canvas)
-        file_menu.addAction(self._reset_action)
-
-        file_menu.addSeparator()
-        exit_action = QAction("E&xit", self)
-        exit_action.setShortcut("Ctrl+Q")
-        exit_action.triggered.connect(self._request_quit)
-        file_menu.addAction(exit_action)
-
-        self._tracking_toggle_action = QAction("Start", self)
-        self._tracking_toggle_action.setShortcut("Ctrl+R")
-        self._tracking_toggle_action.triggered.connect(lambda: self._set_tracking(not self._canvas.is_tracking()))
-        tracking_menu.addAction(self._tracking_toggle_action)
-        self._tracking_reset_action = QAction("Reset", self)
-        self._tracking_reset_action.setShortcut("Ctrl+N")
-        self._tracking_reset_action.triggered.connect(self._reset_canvas)
-        tracking_menu.addAction(self._tracking_reset_action)
-
-        self._ignore_stops_action = QAction("Ignore Mouse Stops", self)
-        self._ignore_stops_action.setCheckable(True)
-        self._ignore_stops_action.toggled.connect(self._on_ignore_stops_toggled)
-        options_menu.addAction(self._ignore_stops_action)
-
-        self._colorful_action = QAction("Colorful Scheme", self)
-        self._colorful_action.setCheckable(True)
-        self._colorful_action.toggled.connect(self._on_colorful_toggled)
-        options_menu.addAction(self._colorful_action)
-
-        self._use_desktop_action = QAction("Use Desktop Background", self)
-        self._use_desktop_action.setCheckable(True)
-        self._use_desktop_action.toggled.connect(self._on_use_desktop_toggled)
-        options_menu.addAction(self._use_desktop_action)
-
-        self._multi_monitor_action = QAction("Use Multiple Monitors", self)
-        self._multi_monitor_action.setCheckable(True)
-        self._multi_monitor_action.setChecked(True)
-        self._multi_monitor_action.toggled.connect(self._on_multi_monitor_toggled)
-        options_menu.addAction(self._multi_monitor_action)
-
-        self._refresh_desktop_action = QAction("Update Desktop Snapshot", self)
-        self._refresh_desktop_action.triggered.connect(self._refresh_desktop_snapshot)
-        self._refresh_desktop_action.setEnabled(False)
-        options_menu.addAction(self._refresh_desktop_action)
-
-        about_action = QAction("About IOGraph", self)
-        about_action.triggered.connect(self._show_about_dialog)
-        help_menu.addAction(about_action)
-        help_menu.addSeparator()
-
-        check_updates_action = QAction("Check for Updates", self)
-        check_updates_action.triggered.connect(lambda: self._check_for_updates(manual=True))
-        help_menu.addAction(check_updates_action)
-        self._check_updates_action = check_updates_action
-
-        self._auto_update_action = QAction("Check for Updates Automatically", self)
-        self._auto_update_action.setCheckable(True)
-        self._auto_update_action.toggled.connect(self._on_auto_update_toggled)
-        help_menu.addAction(self._auto_update_action)
-        install_downloaded_action = QAction("Update now", self)
-        install_downloaded_action.triggered.connect(self._open_downloaded_update)
-        help_menu.addAction(install_downloaded_action)
-        self._install_downloaded_update_action = install_downloaded_action
-
-        help_menu.addSeparator()
-        resources_menu = help_menu.addMenu("Resources")
-        about_iographica_action = QAction("About IOGraphica", self)
-        about_iographica_action.triggered.connect(lambda: self._open_url(self._ABOUT_IOGRAPHICA_URL))
-        resources_menu.addAction(about_iographica_action)
-        website_action = QAction("IOGraph Website", self)
-        website_action.triggered.connect(lambda: self._open_url(self._WEBSITE_URL))
-        resources_menu.addAction(website_action)
-        source_action = QAction("Get Source Code", self)
-        source_action.triggered.connect(lambda: self._open_url(self._GITHUB_URL))
-        resources_menu.addAction(source_action)
-        donate_action = QAction("Support IOGraphica", self)
-        donate_action.triggered.connect(lambda: self._open_support_url("help_menu_support"))
-        resources_menu.addAction(donate_action)
+        refs = build_main_menu(
+            self,
+            on_save_image=self._save_image,
+            on_save_csv=self._save_csv,
+            on_reset=self._reset_canvas,
+            on_quit=self._request_quit,
+            on_toggle_tracking=lambda: self._set_tracking(not self._canvas.is_tracking()),
+            on_ignore_stops_toggled=self._on_ignore_stops_toggled,
+            on_colorful_toggled=self._on_colorful_toggled,
+            on_use_desktop_toggled=self._on_use_desktop_toggled,
+            on_multi_monitor_toggled=self._on_multi_monitor_toggled,
+            on_refresh_desktop_snapshot=self._refresh_desktop_snapshot,
+            on_about=self._show_about_dialog,
+            on_check_updates=lambda: self._check_for_updates(manual=True),
+            on_auto_update_toggled=self._on_auto_update_toggled,
+            on_open_downloaded_update=self._open_downloaded_update,
+            on_open_about_iographica=lambda: self._open_url(self._ABOUT_IOGRAPHICA_URL),
+            on_open_website=lambda: self._open_url(self._WEBSITE_URL),
+            on_open_source=lambda: self._open_url(self._GITHUB_URL),
+            on_open_support=lambda: self._open_support_url("help_menu_support"),
+        )
+        self._save_image_action = refs.save_image_action
+        self._save_csv_action = refs.save_csv_action
+        self._reset_action = refs.reset_action
+        self._tracking_toggle_action = refs.tracking_toggle_action
+        self._tracking_reset_action = refs.tracking_reset_action
+        self._ignore_stops_action = refs.ignore_stops_action
+        self._colorful_action = refs.colorful_action
+        self._use_desktop_action = refs.use_desktop_action
+        self._multi_monitor_action = refs.multi_monitor_action
+        self._refresh_desktop_action = refs.refresh_desktop_action
+        self._check_updates_action = refs.check_updates_action
+        self._auto_update_action = refs.auto_update_action
+        self._install_downloaded_update_action = refs.install_downloaded_update_action
 
     def _setup_tray(self) -> None:
         if not QSystemTrayIcon.isSystemTrayAvailable():
