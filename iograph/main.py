@@ -117,12 +117,12 @@ class MainWindow(QMainWindow):
         )
         self._update_controller.download_finished.connect(self._on_update_download_finished)
         self._update_controller.state_changed.connect(lambda: self._set_update_check_busy(False))
-        self._session = SessionController(self._MONTH_NAMES, self)
-        self._session.tracking_started.connect(lambda: self._signals.session_tracking_started.emit())
-        self._session.tracking_stopped.connect(lambda: self._signals.session_tracking_stopped.emit())
-        self._session.session_reset.connect(lambda: self._signals.session_reset.emit())
-        self._session.session_restored.connect(lambda: self._signals.session_restored.emit())
-        self._tracking_controller = TrackingController(self._session, self)
+        session = SessionController(self._MONTH_NAMES, self)
+        self._tracking_controller = TrackingController(session, self)
+        self._tracking_controller.session_tracking_started.connect(lambda: self._signals.session_tracking_started.emit())
+        self._tracking_controller.session_tracking_stopped.connect(lambda: self._signals.session_tracking_stopped.emit())
+        self._tracking_controller.session_reset.connect(lambda: self._signals.session_reset.emit())
+        self._tracking_controller.session_restored.connect(lambda: self._signals.session_restored.emit())
         self._session_storage = SessionStorage(self._SESSION_STATE_FILE, self._SESSION_CHUNK_MS)
         self._suppress_option_handlers = False
         self._force_quit_requested = False

@@ -31,10 +31,18 @@ class TrackingController(QObject):
     tracking_started = pyqtSignal()
     tracking_stopped = pyqtSignal()
     tracking_reset = pyqtSignal()
+    session_tracking_started = pyqtSignal()
+    session_tracking_stopped = pyqtSignal()
+    session_reset = pyqtSignal()
+    session_restored = pyqtSignal()
 
     def __init__(self, session: SessionController, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._session = session
+        self._session.tracking_started.connect(self.session_tracking_started)
+        self._session.tracking_stopped.connect(self.session_tracking_stopped)
+        self._session.session_reset.connect(self.session_reset)
+        self._session.session_restored.connect(self.session_restored)
 
     def set_tracking(self, enabled: bool) -> TrackingTransition:
         if enabled:
