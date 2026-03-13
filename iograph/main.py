@@ -48,6 +48,7 @@ from .ui.toggle_button import build_toggle_button
 from .ui.tray_menu import build_tray_menu
 from .ui.tray_window import show_window_on_top, tray_settings_label
 from .ui.update_actions import sync_install_update_actions
+from .ui.update_status import apply_check_updates_status, check_updates_label
 
 class PreviewRenderWorker(QObject):
     progress = pyqtSignal(int, object, float)  # request_id, QImage, pixel_scale
@@ -1276,18 +1277,15 @@ class MainWindow(QMainWindow):
         self._status("Update downloaded")
 
     def _set_update_check_busy(self, busy: bool) -> None:
-        if self._update_controller.is_downloading():
-            label = "Downloading Update..."
-        elif self._update_controller.is_checking():
-            label = "Checking for Updates..."
-        else:
-            label = "Check for Updates"
-        self._check_updates_action.setText(label)
-        self._check_updates_action.setEnabled(True)
-        tray_check = getattr(self, "_tray_check_updates_action", None)
-        if tray_check is not None:
-            tray_check.setText(label)
-            tray_check.setEnabled(True)
+        label = check_updates_label(
+            is_downloading=self._update_controller.is_downloading(),
+            is_checking=self._update_controller.is_checking(),
+        )
+        apply_check_updates_status(
+            label=label,
+            menu_action=getattr(self, "_check_updates_action", None),
+            tray_action=getattr(self, "_tray_check_updates_action", None),
+        )
         self._update_install_update_actions()
 
     def _update_install_update_actions(self) -> None:
