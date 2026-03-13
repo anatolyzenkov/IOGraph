@@ -13,7 +13,6 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QFileDialog,
     QGraphicsOpacityEffect,
-    QHBoxLayout,
     QMainWindow,
     QMessageBox,
     QProgressDialog,
@@ -37,6 +36,7 @@ from .core.update_ui_decisions import UpdateUiDecisions
 from .core.update_workers import MacZipInstallWorker
 from .services.settings import AppSettings, SettingsKeys
 from .ui.icon_loader import build_app_icon
+from .ui.layout_scaffold import build_bottom_scaffold
 from .ui.menu_builder import build_main_menu
 from .ui.panel_widgets import build_front_panel, build_secondary_panel
 from .ui.settings_panel import build_settings_panel
@@ -176,21 +176,17 @@ class MainWindow(QMainWindow):
         self._canvas = TrackCanvas(self)
         layout.addWidget(self._canvas, stretch=1)
 
-        self._bottom_panel = QWidget(self)
-        self._bottom_panel.setFixedHeight(self.PANEL_HEIGHT)
-        bottom_layout = QHBoxLayout(self._bottom_panel)
-        bottom_layout.setContentsMargins(6, 0, 6, 0)
-        bottom_layout.setSpacing(0)
-        layout.addWidget(self._bottom_panel, stretch=0)
-
-        self._panels_viewport = QWidget(self._bottom_panel)
-        self._panels_viewport.setContentsMargins(0, 0, 0, 0)
-        self._panels_viewport.setFixedHeight(self.PANEL_HEIGHT)
-        self._panels_viewport.installEventFilter(self)
-        bottom_layout.addWidget(self._panels_viewport, stretch=1)
-
-        self._front_panel = QWidget(self._panels_viewport)
-        self._control_panel = QWidget(self._panels_viewport)
+        scaffold_refs = build_bottom_scaffold(
+            self,
+            container_layout=layout,
+            panel_height=self.PANEL_HEIGHT,
+            viewport_event_filter=self,
+        )
+        self._bottom_panel = scaffold_refs.bottom_panel
+        bottom_layout = scaffold_refs.bottom_layout
+        self._panels_viewport = scaffold_refs.panels_viewport
+        self._front_panel = scaffold_refs.front_panel
+        self._control_panel = scaffold_refs.control_panel
 
         self._toggle_btn = QPushButton(self._canvas)
         self._toggle_btn.setCheckable(True)
