@@ -1,19 +1,12 @@
 from pathlib import Path
-from datetime import datetime
 import webbrowser
 from math import cos, pi
-import json
 import os
 import plistlib
-import re
-import shutil
 import subprocess
-import tempfile
-from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
-from urllib.request import Request, urlopen
 
-from PyQt6.QtCore import QEvent, QLockFile, QObject, QSettings, QSize, Qt, QThread, QTimer, QStandardPaths, QUrl, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QEvent, QLockFile, QObject, QSize, Qt, QThread, QTimer, QStandardPaths, QUrl, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QAction, QColor, QCursor, QDesktopServices, QFont, QGuiApplication, QIcon, QImage, QPainter
 from PyQt6.QtWidgets import (
     QApplication,
@@ -35,6 +28,15 @@ from PyQt6.QtWidgets import (
 import sys
 
 from .tracker import TrackCanvas
+from .app.signals import AppSignals
+from .core.update_controller import UpdateController
+from .core.session_controller import SessionController
+from .core.session_storage import SessionStorage
+from .core.tracking_ui_decisions import TrackingUiDecisions
+from .core.update_storage import UpdateStorageManager
+from .core.update_ui_decisions import UpdateUiDecisions
+from .core.update_workers import MacZipInstallWorker
+from .services.settings import AppSettings, SettingsKeys
 
 _windows_single_instance_lock: QLockFile | None = None
 
@@ -79,316 +81,6 @@ class ExportRenderWorker(QObject):
             self.finished.emit(False, self._path)
 
 
-class UpdateCheckWorker(QObject):
-    finished = pyqtSignal(object)  # dict result
-
-    def __init__(self, current_version: str, include_prerelease: bool) -> None:
-        super().__init__()
-        self._current_version = current_version
-        self._include_prerelease = include_prerelease
-
-    @pyqtSlot()
-    def run(self) -> None:
-        try:
-            req = Request(
-                "https://api.github.com/repos/anatolyzenkov/IOGraph/releases?per_page=20",
-                headers={"Accept": "application/vnd.github+json", "User-Agent": "IOGraph-Updater"},
-            )
-            with urlopen(req, timeout=8) as response:
-                payload = json.loads(response.read().decode("utf-8"))
-            if not isinstance(payload, list):
-                raise ValueError("Invalid updates response")
-            release = self._pick_release(payload, self._include_prerelease)
-            if release is None:
-                self.finished.emit(
-                    {"ok": True, "has_update": False, "latest_tag": "", "latest_version": "", "url": "", "error": ""}
-                )
-                return
-            tag = str(release.get("tag_name", "")).strip()
-            latest_version = self._normalize_version(tag)
-            has_update = self._is_newer(latest_version, self._normalize_version(self._current_version))
-            self.finished.emit(
-                {
-                    "ok": True,
-                    "has_update": has_update,
-                    "latest_tag": tag,
-                    "latest_version": latest_version,
-                    "url": str(release.get("html_url", "")),
-                    "asset_url": self._asset_value(release, "url"),
-                    "asset_name": self._asset_value(release, "name"),
-                    "error": "",
-                }
-            )
-        except (HTTPError, URLError, ValueError, TimeoutError) as exc:
-            self.finished.emit(
-                {
-                    "ok": False,
-                    "has_update": False,
-                    "latest_tag": "",
-                    "latest_version": "",
-                    "url": "",
-                    "error": str(exc),
-                }
-            )
-
-    @classmethod
-    def _pick_release(cls, releases: list[dict], include_prerelease: bool) -> dict | None:
-        best_release: dict | None = None
-        best_key = None
-        for release in releases:
-            if not isinstance(release, dict):
-                continue
-            if release.get("draft", False):
-                continue
-            if not include_prerelease and release.get("prerelease", False):
-                continue
-            if cls._pick_asset(release) is None:
-                # Ignore releases that do not provide an installer for this platform.
-                continue
-            tag = str(release.get("tag_name", "")).strip()
-            version_key = cls._version_key(cls._normalize_version(tag))
-            if version_key is None:
-                continue
-            if best_key is None or version_key > best_key:
-                best_key = version_key
-                best_release = release
-        return best_release
-
-    @classmethod
-    def _asset_value(cls, release: dict, key: str) -> str:
-        asset = cls._pick_asset(release)
-        if asset is None:
-            return ""
-        return str(asset.get(key, "")).strip()
-
-    @staticmethod
-    def _pick_asset(release: dict) -> dict | None:
-        assets = release.get("assets", [])
-        if not isinstance(assets, list):
-            return None
-
-        if sys.platform == "darwin":
-            for asset in assets:
-                if not isinstance(asset, dict):
-                    continue
-                name = str(asset.get("name", "")).lower()
-                if name.endswith(".zip") and any(token in name for token in ("mac", "macos", "osx", "darwin")):
-                    return asset
-            for asset in assets:
-                if not isinstance(asset, dict):
-                    continue
-                name = str(asset.get("name", "")).lower()
-                if name.endswith(".dmg"):
-                    return asset
-            return None
-
-        if sys.platform.startswith("win"):
-            for asset in assets:
-                if not isinstance(asset, dict):
-                    continue
-                name = str(asset.get("name", "")).lower()
-                if name.endswith(".exe") or name.endswith(".msi"):
-                    return asset
-            for asset in assets:
-                if not isinstance(asset, dict):
-                    continue
-                name = str(asset.get("name", "")).lower()
-                if name.endswith(".zip") and any(token in name for token in ("windows", "win")):
-                    return asset
-            return None
-
-        # Linux/other: use explicit Linux artifacts only.
-        for asset in assets:
-            if not isinstance(asset, dict):
-                continue
-            name = str(asset.get("name", "")).lower()
-            if name.endswith(".appimage") or name.endswith(".deb") or name.endswith(".rpm") or name.endswith(".tar.gz"):
-                return asset
-        return None
-
-    @staticmethod
-    def _normalize_version(version: str) -> str:
-        v = str(version).replace("\ufeff", "").strip()
-        if v.lower().startswith("v"):
-            return v[1:]
-        return v
-
-    @classmethod
-    def _is_newer(cls, latest: str, current: str) -> bool:
-        latest_key = cls._version_key(latest)
-        current_key = cls._version_key(current)
-        if latest_key is None:
-            return False
-        if current_key is None:
-            return True
-        return latest_key > current_key
-
-    @staticmethod
-    def _version_key(version: str):
-        m = re.match(r"^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$", version)
-        if not m:
-            return None
-        major, minor, patch = int(m.group(1)), int(m.group(2)), int(m.group(3))
-        prerelease = m.group(4)
-        if prerelease is None:
-            return (major, minor, patch, 1, ())
-        identifiers = []
-        for part in prerelease.split("."):
-            if part.isdigit():
-                identifiers.append((0, int(part)))
-            else:
-                identifiers.append((1, part))
-        return (major, minor, patch, 0, tuple(identifiers))
-
-
-class UpdateDownloadWorker(QObject):
-    finished = pyqtSignal(bool, str, str)  # ok, path, error
-
-    def __init__(self, asset_url: str, target_path: str) -> None:
-        super().__init__()
-        self._asset_url = asset_url
-        self._target_path = Path(target_path)
-
-    @pyqtSlot()
-    def run(self) -> None:
-        tmp_path = self._target_path.with_suffix(self._target_path.suffix + ".part")
-        try:
-            req = Request(
-                self._asset_url,
-                headers={
-                    "Accept": "application/octet-stream",
-                    "User-Agent": "IOGraph-Updater",
-                },
-            )
-            with urlopen(req, timeout=30) as response, tmp_path.open("wb") as out:
-                shutil.copyfileobj(response, out)
-            tmp_path.replace(self._target_path)
-            self.finished.emit(True, str(self._target_path), "")
-        except Exception as exc:
-            try:
-                if tmp_path.exists():
-                    tmp_path.unlink()
-            except Exception:
-                pass
-            self.finished.emit(False, str(self._target_path), str(exc))
-
-
-class MacZipInstallWorker(QObject):
-    finished = pyqtSignal(bool, str)  # ok, error
-
-    def __init__(self, zip_path: str, target_app: str, current_team: str, current_pid: int) -> None:
-        super().__init__()
-        self._zip_path = Path(zip_path)
-        self._target_app = Path(target_app)
-        self._current_team = current_team
-        self._current_pid = int(current_pid)
-
-    @staticmethod
-    def _codesign_team_identifier(app_path: Path) -> str:
-        try:
-            result = subprocess.run(
-                ["codesign", "-dv", "--verbose=4", str(app_path)],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            output = f"{result.stdout}\n{result.stderr}"
-            match = re.search(r"TeamIdentifier=([A-Z0-9]+)", output)
-            if match:
-                return match.group(1)
-        except Exception:
-            return ""
-        return ""
-
-    def _verify_update_app(self, app_path: Path) -> tuple[bool, str]:
-        try:
-            subprocess.run(
-                ["codesign", "--verify", "--deep", "--verbose=2", str(app_path)],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-        except Exception as exc:
-            stderr = ""
-            if isinstance(exc, subprocess.CalledProcessError):
-                stderr = (exc.stderr or "").strip()
-            message = stderr.splitlines()[-1] if stderr else str(exc)
-            return (False, f"signature verification failed ({message})")
-        candidate_team = self._codesign_team_identifier(app_path)
-        if not candidate_team:
-            return (False, "TeamIdentifier not found in downloaded app signature")
-        if self._current_team and candidate_team != self._current_team:
-            return (False, f"team mismatch (downloaded {candidate_team}, current {self._current_team})")
-        return (True, "")
-
-    @pyqtSlot()
-    def run(self) -> None:
-        try:
-            staging_dir = Path(tempfile.mkdtemp(prefix="iograph-update-"))
-            subprocess.run(
-                ["ditto", "-x", "-k", str(self._zip_path), str(staging_dir)],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            app_candidates = sorted(staging_dir.rglob("*.app"))
-            if not app_candidates:
-                self.finished.emit(False, "no .app bundle found in update package")
-                return
-            new_app = app_candidates[0]
-            verified, error = self._verify_update_app(new_app)
-            if not verified:
-                self.finished.emit(False, error or "downloaded app failed signature/team verification")
-                return
-            helper_path = staging_dir / "install_update.sh"
-            helper_path.write_text(
-                "\n".join(
-                    [
-                        "#!/bin/bash",
-                        "set -euo pipefail",
-                        'SRC_APP=\"$1\"',
-                        'DST_APP=\"$2\"',
-                        'PID_TO_WAIT=\"$3\"',
-                        'BACKUP_APP=\"${DST_APP}.old\"',
-                        'TMP_APP=\"${DST_APP}.new\"',
-                        "restore_on_error() {",
-                        "  if [[ ! -e \"$DST_APP\" && -e \"$BACKUP_APP\" ]]; then",
-                        "    mv \"$BACKUP_APP\" \"$DST_APP\" || true",
-                        "  fi",
-                        "  open -a \"$DST_APP\" >/dev/null 2>&1 || true",
-                        "}",
-                        "trap restore_on_error ERR",
-                        "for _ in $(seq 1 240); do",
-                        '  if ! kill -0 \"$PID_TO_WAIT\" >/dev/null 2>&1; then',
-                        "    break",
-                        "  fi",
-                        "  sleep 0.25",
-                        "done",
-                        "rm -rf \"$BACKUP_APP\"",
-                        "rm -rf \"$TMP_APP\"",
-                        "ditto \"$SRC_APP\" \"$TMP_APP\"",
-                        "xattr -dr com.apple.quarantine \"$TMP_APP\" >/dev/null 2>&1 || true",
-                        "if [[ -e \"$DST_APP\" ]]; then mv \"$DST_APP\" \"$BACKUP_APP\"; fi",
-                        "mv \"$TMP_APP\" \"$DST_APP\"",
-                        "rm -rf \"$BACKUP_APP\"",
-                        "open -a \"$DST_APP\" >/dev/null 2>&1 || true",
-                    ]
-                )
-                + "\n",
-                encoding="utf-8",
-            )
-            helper_path.chmod(0o755)
-            subprocess.Popen(
-                ["/bin/bash", str(helper_path), str(new_app), str(self._target_app), str(self._current_pid)],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True,
-            )
-            self.finished.emit(True, "")
-        except Exception as exc:
-            self.finished.emit(False, str(exc))
-
-
 class MainWindow(QMainWindow):
     MAIN_FRAME_WIDTH = 720
     PANEL_HEIGHT = 66
@@ -402,8 +94,8 @@ class MainWindow(QMainWindow):
     _DONATE_UTM_SOURCE = "iograph"
     _DONATE_UTM_MEDIUM = "desktop_app"
     _DONATE_UTM_CAMPAIGN = "donate"
-    _PROMPT_FIRST_IMAGE_SAVE_KEY = "donate_prompt/first_image_saved_shown"
-    _PROMPT_FIRST_RAW_SAVE_KEY = "donate_prompt/first_raw_saved_shown"
+    _PROMPT_FIRST_IMAGE_SAVE_KEY = SettingsKeys.PROMPT_FIRST_IMAGE_SAVE_SHOWN
+    _PROMPT_FIRST_RAW_SAVE_KEY = SettingsKeys.PROMPT_FIRST_RAW_SAVE_SHOWN
     _SESSION_STATE_FILE = "session_state.json"
     _SESSION_CHUNK_MS = 5 * 60 * 1000
     _VERSION_FILE = Path(__file__).resolve().parent.parent / "VERSION"
@@ -413,9 +105,23 @@ class MainWindow(QMainWindow):
 
     def __init__(self) -> None:
         super().__init__()
-        self._settings = QSettings("iographica", "IOGraphPython")
-        self._session_started_at: datetime | None = None
-        self._session_ended_at: datetime | None = None
+        self._settings = AppSettings()
+        self._signals = AppSignals()
+        self._update_storage = UpdateStorageManager(self._settings, self._UPDATE_STAGING_TTL_SECONDS)
+        self._update_controller = UpdateController(self)
+        self._update_controller.check_started.connect(lambda manual: self._signals.update_check_started.emit(manual))
+        self._update_controller.check_finished.connect(self._on_update_check_finished)
+        self._update_controller.download_started.connect(
+            lambda latest_version, manual: self._signals.update_download_started.emit(latest_version, manual)
+        )
+        self._update_controller.download_finished.connect(self._on_update_download_finished)
+        self._update_controller.state_changed.connect(lambda: self._set_update_check_busy(False))
+        self._session = SessionController(self._MONTH_NAMES, self)
+        self._session.tracking_started.connect(lambda: self._signals.session_tracking_started.emit())
+        self._session.tracking_stopped.connect(lambda: self._signals.session_tracking_stopped.emit())
+        self._session.session_reset.connect(lambda: self._signals.session_reset.emit())
+        self._session.session_restored.connect(lambda: self._signals.session_restored.emit())
+        self._session_storage = SessionStorage(self._SESSION_STATE_FILE, self._SESSION_CHUNK_MS)
         self._suppress_option_handlers = False
         self._force_quit_requested = False
         self._last_system_dark_mode = False
@@ -428,10 +134,6 @@ class MainWindow(QMainWindow):
         self._preview_saved_fade_active = True
         self._export_thread: QThread | None = None
         self._export_worker: ExportRenderWorker | None = None
-        self._update_check_thread: QThread | None = None
-        self._update_check_worker: UpdateCheckWorker | None = None
-        self._update_download_thread: QThread | None = None
-        self._update_download_worker = None
         self._mac_install_thread: QThread | None = None
         self._mac_install_worker: MacZipInstallWorker | None = None
         self._mac_install_progress: QProgressDialog | None = None
@@ -815,7 +517,7 @@ class MainWindow(QMainWindow):
     def _on_ignore_stops_toggled(self, checked: bool) -> None:
         if self._suppress_option_handlers:
             return
-        self._persist_option("options/ignore_mouse_stops", checked)
+        self._persist_option(SettingsKeys.OPTION_IGNORE_MOUSE_STOPS, checked)
         self._canvas.set_ignore_mouse_stops(checked, rebuild=False)
         self._request_preview_rerender()
         self._sync_ui_state()
@@ -831,11 +533,9 @@ class MainWindow(QMainWindow):
         self._canvas.reset()
         self._clear_session_state()
         if is_tracking:
-            self._session_started_at = datetime.now()
-            self._session_ended_at = None
+            self._session.start_tracking()
         else:
-            self._session_started_at = None
-            self._session_ended_at = None
+            self._session.reset()
         self._total_time_label.setText("Total Time")
         self._period_label.setText("Time Period")
         self._total_time_label.setVisible(False)
@@ -949,7 +649,7 @@ class MainWindow(QMainWindow):
         self._export_worker = None
 
     def _default_save_dir(self) -> Path:
-        saved = self._settings.value("options/last_save_dir", "", str)
+        saved = self._settings.get_str(SettingsKeys.OPTION_LAST_SAVE_DIR, "")
         if saved:
             candidate = Path(saved).expanduser()
             if candidate.exists() and candidate.is_dir():
@@ -961,8 +661,7 @@ class MainWindow(QMainWindow):
 
     def _remember_save_dir(self, directory: Path) -> None:
         if directory.exists() and directory.is_dir():
-            self._settings.setValue("options/last_save_dir", str(directory))
-            self._settings.sync()
+            self._settings.set(SettingsKeys.OPTION_LAST_SAVE_DIR, str(directory), sync=True)
 
     def _persist_option(self, key: str, value) -> None:
         self._settings.setValue(key, value)
@@ -971,7 +670,7 @@ class MainWindow(QMainWindow):
     def _on_use_desktop_toggled(self, checked: bool) -> None:
         if self._suppress_option_handlers:
             return
-        self._persist_option("options/use_desktop_background", checked)
+        self._persist_option(SettingsKeys.OPTION_USE_DESKTOP_BACKGROUND, checked)
         self._canvas.set_use_desktop_background(checked)
         self._refresh_desktop_action.setEnabled(checked)
         self._update_desktop_btn.setVisible(checked)
@@ -1080,7 +779,7 @@ class MainWindow(QMainWindow):
             return
         if checked == self._canvas.is_use_multiple_monitors():
             return
-        self._persist_option("options/use_multiple_monitors", checked)
+        self._persist_option(SettingsKeys.OPTION_USE_MULTIPLE_MONITORS, checked)
         self._canvas.set_suspend_preview_updates(True)
         self._canvas.set_use_multiple_monitors(checked, rebuild=False)
         if self._use_desktop_action.isChecked():
@@ -1099,11 +798,11 @@ class MainWindow(QMainWindow):
         self._multi_monitor_box.setEnabled(has_multiple)
 
     def _load_settings(self) -> None:
-        ignore_stops = self._settings.value("options/ignore_mouse_stops", False, bool)
-        colorful = self._settings.value("options/colorful_scheme", False, bool)
-        use_desktop = self._settings.value("options/use_desktop_background", False, bool)
-        use_multi_monitor = self._settings.value("options/use_multiple_monitors", True, bool)
-        auto_update = self._settings.value("options/automatic_update", True, bool)
+        ignore_stops = self._settings.get_bool(SettingsKeys.OPTION_IGNORE_MOUSE_STOPS, False)
+        colorful = self._settings.get_bool(SettingsKeys.OPTION_COLORFUL_SCHEME, False)
+        use_desktop = self._settings.get_bool(SettingsKeys.OPTION_USE_DESKTOP_BACKGROUND, False)
+        use_multi_monitor = self._settings.get_bool(SettingsKeys.OPTION_USE_MULTIPLE_MONITORS, True)
+        auto_update = self._settings.get_bool(SettingsKeys.OPTION_AUTOMATIC_UPDATE, True)
 
         # Apply to runtime first (source of truth), then mirror in UI without signal side-effects.
         self._canvas.set_ignore_mouse_stops(ignore_stops, rebuild=False)
@@ -1128,60 +827,53 @@ class MainWindow(QMainWindow):
         self._sync_ui_state()
 
     def _save_settings(self) -> None:
-        self._settings.setValue("options/ignore_mouse_stops", self._ignore_stops_action.isChecked())
-        self._settings.setValue("options/colorful_scheme", self._colorful_action.isChecked())
-        self._settings.setValue("options/use_multiple_monitors", self._multi_monitor_action.isChecked())
-        self._settings.setValue("options/use_desktop_background", self._use_desktop_action.isChecked())
-        self._settings.setValue("options/automatic_update", self._auto_update_action.isChecked())
-        self._settings.sync()
+        self._settings.set_many(
+            {
+                SettingsKeys.OPTION_IGNORE_MOUSE_STOPS: self._ignore_stops_action.isChecked(),
+                SettingsKeys.OPTION_COLORFUL_SCHEME: self._colorful_action.isChecked(),
+                SettingsKeys.OPTION_USE_MULTIPLE_MONITORS: self._multi_monitor_action.isChecked(),
+                SettingsKeys.OPTION_USE_DESKTOP_BACKGROUND: self._use_desktop_action.isChecked(),
+                SettingsKeys.OPTION_AUTOMATIC_UPDATE: self._auto_update_action.isChecked(),
+            },
+            sync=True,
+        )
 
     def _session_state_path(self) -> Path:
-        base = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation)
-        if not base:
-            return Path.home() / ".iograph" / self._SESSION_STATE_FILE
-        return Path(base) / self._SESSION_STATE_FILE
+        return self._session_storage.session_state_path()
 
     def _preview_cache_path(self) -> Path:
-        return self._session_state_path().with_name("preview_cache.png")
+        return self._session_storage.preview_cache_path()
 
     def _desktop_cache_path(self) -> Path:
-        return self._session_state_path().with_name("desktop_cache.png")
+        return self._session_storage.desktop_cache_path()
 
     def _raw_chunks_dir(self) -> Path:
-        return self._session_state_path().with_name("raw_chunks")
+        return self._session_storage.raw_chunks_dir()
 
     def _save_session_state(self) -> None:
         signature = self._canvas.render_cache_signature()
         preview_saved = self._canvas.export_preview_cache(str(self._preview_cache_path()))
         desktop_saved = self._canvas.export_desktop_background_cache(str(self._desktop_cache_path()))
-        raw_storage = self._write_raw_chunks(self._canvas.export_raw_samples())
+        raw_storage = self._session_storage.write_raw_chunks(self._canvas.export_raw_samples())
         state = {
             "version": 1,
-            "session_started_at": self._session_started_at.isoformat() if self._session_started_at else None,
-            "session_ended_at": self._session_ended_at.isoformat() if self._session_ended_at else None,
+            "session_started_at": self._session.started_at_iso(),
+            "session_ended_at": self._session.ended_at_iso(),
             "raw_storage": raw_storage,
             "render_signature": signature,
             "preview_cache_saved": preview_saved,
             "desktop_cache_saved": desktop_saved,
         }
-        path = self._session_state_path()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+        self._session_storage.save_state(state)
 
     def _load_session_state(self) -> None:
-        path = self._session_state_path()
-        if not path.exists():
+        payload = self._session_storage.load_state()
+        if payload is None:
             if self._use_desktop_action.isChecked():
                 self._refresh_desktop_snapshot()
             return
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
-            return
-        if not isinstance(payload, dict):
-            return
 
-        raw_samples = self._read_raw_samples(payload)
+        raw_samples = self._session_storage.read_raw_samples(payload)
         signature = payload.get("render_signature")
         use_cache = signature == self._canvas.render_cache_signature()
         loaded_preview_cache = False
@@ -1199,119 +891,14 @@ class MainWindow(QMainWindow):
 
         started_raw = payload.get("session_started_at")
         ended_raw = payload.get("session_ended_at")
-        if isinstance(started_raw, str):
-            try:
-                self._session_started_at = datetime.fromisoformat(started_raw)
-            except ValueError:
-                self._session_started_at = None
-        if isinstance(ended_raw, str):
-            try:
-                self._session_ended_at = datetime.fromisoformat(ended_raw)
-            except ValueError:
-                self._session_ended_at = None
-
-        if self._session_started_at is None and self._canvas.get_elapsed_ms() > 0:
-            self._session_started_at = datetime.now()
+        self._session.restore_from_iso(started_raw, ended_raw)
+        self._session.ensure_started_for_elapsed(self._canvas.get_elapsed_ms())
 
         if self._canvas.get_elapsed_ms() > 0:
             self._update_timer_label()
 
     def _clear_session_state(self) -> None:
-        path = self._session_state_path()
-        if path.exists():
-            try:
-                path.unlink()
-            except OSError:
-                pass
-        preview_cache = self._preview_cache_path()
-        if preview_cache.exists():
-            try:
-                preview_cache.unlink()
-            except OSError:
-                pass
-        desktop_cache = self._desktop_cache_path()
-        if desktop_cache.exists():
-            try:
-                desktop_cache.unlink()
-            except OSError:
-                pass
-        chunks_dir = self._raw_chunks_dir()
-        if chunks_dir.exists() and chunks_dir.is_dir():
-            for f in chunks_dir.glob("*.ndjson"):
-                try:
-                    f.unlink()
-                except OSError:
-                    pass
-            try:
-                chunks_dir.rmdir()
-            except OSError:
-                pass
-
-    def _write_raw_chunks(self, rows: list[dict]) -> dict:
-        chunks_dir = self._raw_chunks_dir()
-        chunks_dir.mkdir(parents=True, exist_ok=True)
-        for old in chunks_dir.glob("*.ndjson"):
-            try:
-                old.unlink()
-            except OSError:
-                pass
-
-        chunk_ms = self._SESSION_CHUNK_MS
-        buckets: dict[int, list[dict]] = {}
-        for row in rows:
-            t = int(row.get("t", 0))
-            key = max(0, t // chunk_ms)
-            buckets.setdefault(key, []).append(row)
-
-        index: list[dict] = []
-        for key in sorted(buckets.keys()):
-            chunk_rows = buckets[key]
-            fname = f"chunk_{key:06d}.ndjson"
-            path = chunks_dir / fname
-            with path.open("w", encoding="utf-8") as f:
-                for row in chunk_rows:
-                    f.write(json.dumps(row, ensure_ascii=False) + "\n")
-            index.append(
-                {
-                    "file": fname,
-                    "first_t": int(chunk_rows[0].get("t", 0)),
-                    "last_t": int(chunk_rows[-1].get("t", 0)),
-                    "count": len(chunk_rows),
-                }
-            )
-        return {"format": "ndjson-chunks", "chunk_ms": chunk_ms, "chunks": index}
-
-    def _read_raw_samples(self, payload: dict) -> list[dict]:
-        storage = payload.get("raw_storage")
-        if isinstance(storage, dict) and storage.get("format") == "ndjson-chunks":
-            chunks = storage.get("chunks", [])
-            rows: list[dict] = []
-            if isinstance(chunks, list):
-                for chunk in chunks:
-                    if not isinstance(chunk, dict):
-                        continue
-                    name = chunk.get("file")
-                    if not isinstance(name, str):
-                        continue
-                    path = self._raw_chunks_dir() / name
-                    if not path.exists():
-                        continue
-                    try:
-                        for line in path.read_text(encoding="utf-8").splitlines():
-                            if not line.strip():
-                                continue
-                            row = json.loads(line)
-                            if isinstance(row, dict):
-                                rows.append(row)
-                    except Exception:
-                        continue
-            return rows
-
-        # Backward compatibility with old inline format.
-        inline = payload.get("raw_samples", [])
-        if isinstance(inline, list):
-            return [r for r in inline if isinstance(r, dict)]
-        return []
+        self._session_storage.clear_state_files()
 
     def closeEvent(self, event) -> None:  # type: ignore[override]
         if getattr(self, "_tray_icon", None) is not None and not self._force_quit_requested:
@@ -1349,16 +936,14 @@ class MainWindow(QMainWindow):
 
     def _set_tracking(self, enabled: bool) -> None:
         if enabled:
-            if self._session_started_at is None:
-                self._session_started_at = datetime.now()
-            self._session_ended_at = None
+            self._session.start_tracking()
             self._canvas.start_tracking()
             self._toggle_btn.setChecked(True)
             self._sync_ui_state()
             self._status("Tracking started")
             return
         self._canvas.stop_tracking()
-        self._session_ended_at = datetime.now()
+        self._session.stop_tracking()
         self._toggle_btn.setChecked(False)
         self._sync_ui_state()
         self._status("Tracking stopped")
@@ -1397,55 +982,10 @@ class MainWindow(QMainWindow):
         return (max(1, g.width()), max(1, g.height()))
 
     def _build_period_label(self) -> str:
-        started = self._session_started_at
-        if started is None:
-            return "Time Period"
-        ended = self._session_ended_at or datetime.now()
-        if (ended - started).total_seconds() <= 60:
-            return f"From {self._date_pattern(started, False)}"
-        full_date_treatment = started.day != ended.day or started.month != ended.month
-        return f"From {self._date_pattern(started, full_date_treatment)} to {self._date_pattern(ended, full_date_treatment)}"
+        return self._session.period_label()
 
     def _build_tracking_time_text(self, ms: int) -> str:
-        if ms < 1000:
-            return "Just started"
-        seconds = ms / 1000.0
-        minutes = ms / (60.0 * 1000.0)
-        hours = ms / (60.0 * 60.0 * 1000.0)
-        days = ms / (24.0 * 60.0 * 60.0 * 1000.0)
-        if minutes < 1.0:
-            n = int(seconds)
-            return f"{n} second" if n == 1 else f"{n} seconds"
-        if hours < 1.0:
-            n = int(minutes)
-            return f"{n} minute" if n == 1 else f"{n} minutes"
-        if days < 1.0:
-            n = self._precision(hours)
-            return f"{n} hour" if hours < 1.1 else f"{n} hours"
-        n = self._precision(days)
-        return f"{n} day" if days < 1.1 else f"{n} days"
-
-    def _date_pattern(self, dt: datetime, full_date: bool) -> str:
-        base = f"{dt.hour}:{dt.minute:02d}"
-        if not full_date:
-            return base
-        return f"{base} {self._MONTH_NAMES[dt.month - 1]} {self._ordinal(dt.day)}"
-
-    @staticmethod
-    def _ordinal(day: int) -> str:
-        if day == 1:
-            return "1st"
-        if day == 2:
-            return "2nd"
-        if day == 3:
-            return "3rd"
-        return f"{day}th"
-
-    @staticmethod
-    def _precision(value: float) -> str:
-        if value % 1.0 < 0.1:
-            return str(int(value))
-        return f"{value:.1f}"
+        return SessionController.tracking_time_text(ms)
 
     def eventFilter(self, obj, event) -> bool:  # type: ignore[override]
         if obj is self._canvas:
@@ -1599,7 +1139,7 @@ class MainWindow(QMainWindow):
             return False
         if not self._has_pending_downloaded_update():
             return False
-        ignores = int(self._settings.value("updates/install_ignore_count", 0, int))
+        ignores = int(self._settings.value(SettingsKeys.UPDATE_INSTALL_IGNORE_COUNT, 0, int))
         return ignores < self._UPDATE_BADGE_MAX_IGNORES
 
     def _app_icon(self) -> QIcon:
@@ -1644,7 +1184,7 @@ class MainWindow(QMainWindow):
             return
         if checked == self._canvas.is_colorful_scheme():
             return
-        self._persist_option("options/colorful_scheme", checked)
+        self._persist_option(SettingsKeys.OPTION_COLORFUL_SCHEME, checked)
         self._canvas.set_colorful_scheme(checked, rebuild=False)
         self._request_preview_rerender()
         self._refresh_dpi_dependent_icons()
@@ -1652,8 +1192,7 @@ class MainWindow(QMainWindow):
 
     def _confirm_reset_for_switch(self, title: str, message: str) -> bool:
         elapsed = self._canvas.get_elapsed_ms()
-        if elapsed > 30 * 60 * 1000:
-            message += f"\nAre you sure? After {self._build_tracking_time_text(elapsed)} of tracking?"
+        message = TrackingUiDecisions.extend_reset_message_for_long_tracking(message, elapsed)
         answer = QMessageBox.question(
             self,
             title,
@@ -1665,9 +1204,10 @@ class MainWindow(QMainWindow):
 
     def _confirm_reset(self) -> bool:
         elapsed = self._canvas.get_elapsed_ms()
-        message = "Do you really want to start from scratch?"
-        if elapsed > 30 * 60 * 1000:
-            message += f"\nAre you sure? After {self._build_tracking_time_text(elapsed)} of tracking?"
+        message = TrackingUiDecisions.extend_reset_message_for_long_tracking(
+            "Do you really want to start from scratch?",
+            elapsed,
+        )
         answer = QMessageBox.question(
             self,
             "Reset confirmation",
@@ -1822,37 +1362,13 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _normalize_version_tag(version: str) -> str:
-        v = str(version).replace("\ufeff", "").strip()
-        if v.lower().startswith("v"):
-            return v[1:]
-        return v
+        return UpdateStorageManager.normalize_version_tag(version)
 
     def _cleanup_downloaded_update_if_installed(self) -> None:
-        self._cleanup_stale_update_temp_files()
-        downloaded = self._settings.value("updates/last_downloaded_version", "", str)
-        if not downloaded:
-            return
-        current = self._normalize_version_tag(self._app_version)
-        target = self._normalize_version_tag(downloaded)
-        current_key = UpdateCheckWorker._version_key(current)
-        target_key = UpdateCheckWorker._version_key(target)
-        if current_key is None or target_key is None or current_key < target_key:
-            return
-        path = self._settings.value("updates/last_downloaded_path", "", str)
-        if path:
-            p = Path(path)
-            try:
-                if p.exists():
-                    p.unlink()
-            except Exception:
-                pass
-        self._settings.remove("updates/last_downloaded_path")
-        self._settings.remove("updates/last_downloaded_version")
-        self._settings.remove("updates/last_auto_downloaded_version")
-        self._settings.remove("updates/install_ignore_count")
+        self._update_storage.cleanup_downloaded_update_if_installed(self._app_version)
 
     def _check_for_updates(self, manual: bool) -> None:
-        if self._update_download_thread is not None:
+        if self._update_controller.is_downloading():
             if manual:
                 QMessageBox.information(
                     self,
@@ -1860,7 +1376,7 @@ class MainWindow(QMainWindow):
                     "Update download is in progress.\nPlease wait until it finishes.",
                 )
             return
-        if self._update_check_thread is not None:
+        if self._update_controller.is_checking():
             if manual:
                 QMessageBox.information(
                     self,
@@ -1868,23 +1384,14 @@ class MainWindow(QMainWindow):
                     "Update check is already running.\nPlease wait a few seconds and try again.",
                 )
             return
-        include_prerelease = "-" in self._app_version
-        thread = QThread(self)
-        worker = UpdateCheckWorker(self._app_version, include_prerelease)
-        worker.moveToThread(thread)
-        thread.started.connect(worker.run)
-        worker.finished.connect(lambda result, is_manual=manual: self._on_update_check_finished(is_manual, result))
-        worker.finished.connect(thread.quit)
-        worker.finished.connect(worker.deleteLater)
-        thread.finished.connect(thread.deleteLater)
-        thread.finished.connect(self._on_update_check_thread_closed)
-        self._update_check_thread = thread
-        self._update_check_worker = worker
+        if not self._update_controller.start_check(self._app_version, manual):
+            return
         self._set_update_check_busy(True)
         self._status("Checking for updates...")
-        thread.start()
+        return
 
     def _on_update_check_finished(self, manual: bool, result: dict) -> None:
+        self._signals.update_check_finished.emit(manual, result)
         ok = bool(result.get("ok", False))
         if not ok:
             if manual:
@@ -1902,21 +1409,16 @@ class MainWindow(QMainWindow):
             self._status("No updates found")
             return
         if not manual:
-            last_downloaded = self._settings.value("updates/last_auto_downloaded_version", "", str)
+            last_downloaded = self._settings.value(SettingsKeys.UPDATE_LAST_AUTO_DOWNLOADED_VERSION, "", str)
             if last_downloaded == latest_tag:
-                saved_path = self._settings.value("updates/last_downloaded_path", "", str)
+                saved_path = self._settings.value(SettingsKeys.UPDATE_LAST_DOWNLOADED_PATH, "", str)
                 if saved_path and Path(saved_path).exists():
                     return
-                self._settings.remove("updates/last_auto_downloaded_version")
+                self._settings.remove(SettingsKeys.UPDATE_LAST_AUTO_DOWNLOADED_VERSION)
         if self._is_latest_update_already_downloaded(latest_tag):
             if manual:
                 downloaded_path = self._pending_downloaded_update_path()
-                zip_update = self._is_zip_update(downloaded_path)
-                message = (
-                    "New version of IOGraph is already downloaded.\n\nOpen downloaded update package?"
-                    if zip_update
-                    else "New version of IOGraph is already downloaded.\n\nClose and install now?"
-                )
+                message = UpdateUiDecisions.already_downloaded_prompt(downloaded_path)
                 answer = QMessageBox.question(
                     self,
                     "Update Ready",
@@ -1927,7 +1429,7 @@ class MainWindow(QMainWindow):
                 if answer == QMessageBox.StandardButton.Yes:
                     self._open_downloaded_update()
             return
-        if self._update_download_thread is not None:
+        if self._update_controller.is_downloading():
             return
         if manual:
             buttons = QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
@@ -1947,126 +1449,40 @@ class MainWindow(QMainWindow):
         self._start_update_download(latest_version, asset_url, asset_name, manual)
         self._status("Update available")
 
-    def _on_update_check_thread_closed(self) -> None:
-        self._update_check_thread = None
-        self._update_check_worker = None
-        self._set_update_check_busy(False)
-
     def _start_update_download(self, latest_version: str, asset_url: str, asset_name: str, manual: bool) -> None:
-        if self._update_download_thread is not None:
+        if self._update_controller.is_downloading():
             return
-        target = self._update_target_path(asset_name, latest_version, manual)
-        self._cleanup_partial_update_files(target.parent, asset_name)
-        self._clear_stale_download_metadata_for(latest_version)
-        thread = QThread(self)
-        worker = UpdateDownloadWorker(asset_url, str(target))
-        worker.moveToThread(thread)
-        thread.started.connect(worker.run)
-        worker.finished.connect(
-            lambda ok, path, err, is_manual=manual: self._on_update_download_finished(ok, path, err, latest_version, is_manual)
-        )
-        worker.finished.connect(thread.quit)
-        worker.finished.connect(worker.deleteLater)
-        thread.finished.connect(thread.deleteLater)
-        thread.finished.connect(self._on_update_download_thread_closed)
-        self._update_download_thread = thread
-        self._update_download_worker = worker
+        target = self._update_storage.update_target_path(asset_name, latest_version, manual)
+        self._update_storage.cleanup_partial_update_files(target.parent, asset_name)
+        self._update_storage.clear_stale_download_metadata_for(latest_version)
+        if not self._update_controller.start_download(latest_version, asset_url, str(target), manual):
+            return
         self._set_update_check_busy(True)
         self._status("Downloading update...")
-        thread.start()
+        return
 
     def _update_target_path(self, asset_name: str, latest_version: str, manual: bool) -> Path:
-        if manual:
-            downloads = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DownloadLocation)
-            target_dir = Path(downloads) if downloads else (Path.home() / "Downloads")
-            target_dir.mkdir(parents=True, exist_ok=True)
-            base = target_dir / asset_name
-            if not base.exists():
-                return base
-            stem, suffix = base.stem, base.suffix
-            return target_dir / f"{stem}-{latest_version}{suffix}"
-        target_dir = self._updates_cache_dir()
-        target_dir.mkdir(parents=True, exist_ok=True)
-        return target_dir / self._auto_update_cache_name(asset_name, latest_version)
+        return self._update_storage.update_target_path(asset_name, latest_version, manual)
 
     def _updates_cache_dir(self) -> Path:
-        appdata = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppLocalDataLocation)
-        if not appdata:
-            appdata = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation)
-        if appdata:
-            return Path(appdata) / "updates"
-        return Path.home() / ".iograph" / "updates"
+        return self._update_storage.updates_cache_dir()
 
     @staticmethod
     def _cleanup_partial_update_files(target_dir: Path, asset_name: str) -> None:
-        try:
-            target_dir.mkdir(parents=True, exist_ok=True)
-        except Exception:
-            return
-        stem = Path(asset_name).stem
-        for part in target_dir.glob(f"{stem}*.part"):
-            try:
-                if part.is_file():
-                    part.unlink()
-            except Exception:
-                pass
+        UpdateStorageManager.cleanup_partial_update_files(target_dir, asset_name)
 
     def _clear_stale_download_metadata_for(self, latest_version: str) -> None:
-        target_tag = f"v{latest_version}"
-        stored_tag = str(self._settings.value("updates/last_downloaded_version", "", str)).strip()
-        if not stored_tag:
-            return
-        if self._normalize_version_tag(stored_tag) == self._normalize_version_tag(target_tag):
-            return
-        previous_path = str(self._settings.value("updates/last_downloaded_path", "", str)).strip()
-        if previous_path:
-            p = Path(previous_path)
-            try:
-                if p.exists():
-                    p.unlink()
-            except Exception:
-                pass
-        self._settings.remove("updates/last_downloaded_path")
-        self._settings.remove("updates/last_downloaded_version")
-        self._settings.remove("updates/last_auto_downloaded_version")
-        self._settings.remove("updates/last_prompted_version")
-        self._settings.remove("updates/install_ignore_count")
+        self._update_storage.clear_stale_download_metadata_for(latest_version)
 
     def _cleanup_stale_update_temp_files(self) -> None:
-        updates_dir = self._updates_cache_dir()
-        if not updates_dir.exists():
-            return
-        now = datetime.now().timestamp()
-        for part in updates_dir.glob("*.part"):
-            try:
-                if part.is_file():
-                    part.unlink()
-            except Exception:
-                pass
-        for staging in updates_dir.glob("iograph-update-*"):
-            try:
-                if not staging.is_dir():
-                    continue
-                age = now - staging.stat().st_mtime
-                if age >= self._UPDATE_STAGING_TTL_SECONDS:
-                    shutil.rmtree(staging, ignore_errors=True)
-            except Exception:
-                pass
+        self._update_storage.cleanup_stale_update_temp_files()
 
     @staticmethod
     def _auto_update_cache_name(asset_name: str, latest_version: str) -> str:
-        suffix = Path(asset_name).suffix.lower()
-        if not suffix:
-            suffix = ".bin"
-        safe_version = re.sub(r"[^0-9A-Za-z._-]", "-", str(latest_version).strip())
-        safe_version = safe_version or "unknown"
-        if sys.platform.startswith("win"):
-            return f"IOGraph-windows-v{safe_version}{suffix}"
-        if sys.platform == "darwin":
-            return f"IOGraph-macos-v{safe_version}{suffix}"
-        return f"IOGraph-linux-v{safe_version}{suffix}"
+        return UpdateStorageManager.auto_update_cache_name(asset_name, latest_version)
 
     def _on_update_download_finished(self, ok: bool, path: str, error: str, latest_version: str, manual: bool) -> None:
+        self._signals.update_download_finished.emit(ok, path, error, manual)
         if not ok:
             if manual:
                 QMessageBox.warning(self, "Update Download", f"Failed to download IOGraph {latest_version}:\n{error}")
@@ -2074,30 +1490,9 @@ class MainWindow(QMainWindow):
                 self._status("Background update download failed")
             return
         local = Path(path)
-        tagged_version = f"v{latest_version}"
-        previous_path_raw = str(self._settings.value("updates/last_downloaded_path", "", str)).strip()
-        previous_version = str(self._settings.value("updates/last_downloaded_version", "", str)).strip()
-        if previous_path_raw and previous_path_raw != str(local) and previous_version != tagged_version:
-            old_path = Path(previous_path_raw)
-            try:
-                if old_path.exists():
-                    old_path.unlink()
-            except Exception:
-                pass
-        self._settings.setValue("updates/last_downloaded_path", str(local))
-        self._settings.setValue("updates/last_downloaded_version", tagged_version)
-        self._settings.setValue("updates/install_ignore_count", 0)
+        self._update_storage.register_download_result(local, latest_version, manual)
         self._update_install_update_actions()
-        if not manual:
-            self._settings.setValue("updates/last_auto_downloaded_version", tagged_version)
-            self._settings.setValue("updates/last_prompted_version", tagged_version)
-        is_zip = self._is_zip_update(local)
-        if is_zip and sys.platform == "darwin":
-            prompt_message = "New version of IOGraph is ready to install.\n\nClose and install now?"
-        elif is_zip:
-            prompt_message = "New version of IOGraph is downloaded.\n\nOpen downloaded update package?"
-        else:
-            prompt_message = "New version of IOGraph is ready to install.\n\nClose and install now?"
+        prompt_message = UpdateUiDecisions.install_ready_prompt(local)
         prompt = QMessageBox.question(
             self,
             "Update Ready",
@@ -2106,24 +1501,18 @@ class MainWindow(QMainWindow):
             QMessageBox.StandardButton.Yes,
         )
         if prompt == QMessageBox.StandardButton.Yes:
-            self._settings.setValue("updates/install_ignore_count", 0)
+            self._update_storage.reset_install_ignore_count()
             self._open_update_artifact(local)
             self._status("Update downloaded")
             return
-        ignored = int(self._settings.value("updates/install_ignore_count", 0, int)) + 1
-        self._settings.setValue("updates/install_ignore_count", ignored)
+        self._update_storage.increment_install_ignore_count()
         self._update_tray_state()
         self._status("Update downloaded")
 
-    def _on_update_download_thread_closed(self) -> None:
-        self._update_download_thread = None
-        self._update_download_worker = None
-        self._set_update_check_busy(False)
-
     def _set_update_check_busy(self, busy: bool) -> None:
-        if self._update_download_thread is not None:
+        if self._update_controller.is_downloading():
             label = "Downloading Update..."
-        elif self._update_check_thread is not None:
+        elif self._update_controller.is_checking():
             label = "Checking for Updates..."
         else:
             label = "Check for Updates"
@@ -2138,12 +1527,7 @@ class MainWindow(QMainWindow):
     def _update_install_update_actions(self) -> None:
         has_file = self._has_pending_downloaded_update()
         downloaded = self._pending_downloaded_update_path()
-        if self._is_zip_update(downloaded) and sys.platform == "darwin":
-            label = "Install Downloaded Update..."
-        elif self._is_zip_update(downloaded):
-            label = "Open Update Package"
-        else:
-            label = "Update now"
+        label = UpdateUiDecisions.install_action_label(downloaded)
         action = getattr(self, "_install_downloaded_update_action", None)
         if action is not None:
             action.setText(label)
@@ -2159,49 +1543,33 @@ class MainWindow(QMainWindow):
         self._update_tray_state()
 
     def _has_pending_downloaded_update(self) -> bool:
-        path = self._settings.value("updates/last_downloaded_path", "", str)
-        return bool(path and Path(path).exists())
+        return self._update_storage.has_pending_downloaded_update()
 
     def _pending_downloaded_update_path(self) -> Path | None:
-        path = self._settings.value("updates/last_downloaded_path", "", str)
-        if not path:
-            return None
-        p = Path(path)
-        return p if p.exists() else None
+        return self._update_storage.pending_downloaded_update_path()
 
     @staticmethod
     def _is_zip_update(path: Path | None) -> bool:
-        return path is not None and path.suffix.lower() == ".zip"
+        return UpdateUiDecisions.is_zip_update(path)
 
     def _is_latest_update_already_downloaded(self, latest_tag: str) -> bool:
-        downloaded_tag = str(self._settings.value("updates/last_downloaded_version", "", str)).strip()
-        if not downloaded_tag:
-            return False
-        if self._normalize_version_tag(downloaded_tag) != self._normalize_version_tag(latest_tag):
-            return False
-        path = self._settings.value("updates/last_downloaded_path", "", str)
-        if path and Path(path).exists():
-            return True
-        # stale metadata for missing file should not block normal update flow
-        self._settings.remove("updates/last_downloaded_path")
-        self._settings.remove("updates/last_downloaded_version")
-        self._update_install_update_actions()
-        return False
+        has_downloaded, stale_cleaned = self._update_storage.is_latest_update_already_downloaded(latest_tag)
+        if stale_cleaned:
+            self._update_install_update_actions()
+        return has_downloaded
 
     def _open_downloaded_update(self) -> None:
-        path = self._settings.value("updates/last_downloaded_path", "", str)
+        path = self._settings.value(SettingsKeys.UPDATE_LAST_DOWNLOADED_PATH, "", str)
         if not path:
             QMessageBox.information(self, "Install Downloaded Update", "No downloaded update was found.")
             return
         local = Path(path)
         if not local.exists():
-            self._settings.remove("updates/last_downloaded_path")
-            self._settings.remove("updates/last_downloaded_version")
-            self._settings.remove("updates/install_ignore_count")
+            self._update_storage.clear_missing_download_file_state()
             self._update_install_update_actions()
             QMessageBox.information(self, "Install Downloaded Update", "Downloaded update file no longer exists.")
             return
-        self._settings.setValue("updates/install_ignore_count", 0)
+        self._update_storage.reset_install_ignore_count()
         self._open_update_artifact(local)
 
     def _open_update_artifact(self, path: Path) -> None:
@@ -2304,7 +1672,7 @@ class MainWindow(QMainWindow):
         if self._suppress_option_handlers:
             return
         self._set_auto_update_state(checked)
-        self._persist_option("options/automatic_update", checked)
+        self._persist_option(SettingsKeys.OPTION_AUTOMATIC_UPDATE, checked)
 
     def _set_auto_update_state(self, checked: bool) -> None:
         self._suppress_option_handlers = True
@@ -2364,38 +1732,31 @@ class MainWindow(QMainWindow):
             return
         elapsed = self._canvas.get_elapsed_ms()
         tracking = self._canvas.is_tracking()
-        if tracking:
-            self._tray_toggle_action.setText("Pause")
-        else:
-            self._tray_toggle_action.setText("Start" if elapsed == 0 else "Resume")
-        can_save = tracking or elapsed > 0
-        self._tray_save_image_action.setEnabled(can_save)
-        self._tray_save_csv_action.setEnabled(can_save)
-        self._tray_reset_action.setEnabled(elapsed > 2000)
+        ui_state = TrackingUiDecisions.compute_state(elapsed, tracking)
+        self._tray_toggle_action.setText(ui_state.toggle_label)
+        self._tray_save_image_action.setEnabled(ui_state.can_save)
+        self._tray_save_csv_action.setEnabled(ui_state.can_save)
+        self._tray_reset_action.setEnabled(ui_state.can_reset)
         self._tray_settings_action.setText("Hide Settings" if self._setup_btn.isChecked() else "Show Settings")
         tray.setIcon(self._tray_state_icon(tracking))
 
     def _sync_ui_state(self) -> None:
         elapsed = self._canvas.get_elapsed_ms()
         tracking = self._canvas.is_tracking()
-        can_save = tracking or elapsed > 0
-        can_reset = elapsed > 2000
+        ui_state = TrackingUiDecisions.compute_state(elapsed, tracking)
 
         self._toggle_btn.setChecked(tracking)
         self._update_toggle_icon()
 
-        self._save_btn.setEnabled(can_save)
+        self._save_btn.setEnabled(ui_state.can_save)
         self._update_save_icon()
 
-        self._reset_action.setEnabled(can_reset)
-        self._tracking_reset_action.setEnabled(can_reset)
-        self._save_image_action.setEnabled(can_save)
-        self._save_csv_action.setEnabled(can_save)
+        self._reset_action.setEnabled(ui_state.can_reset)
+        self._tracking_reset_action.setEnabled(ui_state.can_reset)
+        self._save_image_action.setEnabled(ui_state.can_save)
+        self._save_csv_action.setEnabled(ui_state.can_save)
 
-        if tracking:
-            self._tracking_toggle_action.setText("Pause")
-        else:
-            self._tracking_toggle_action.setText("Start" if elapsed == 0 else "Resume")
+        self._tracking_toggle_action.setText(ui_state.toggle_label)
 
         # Safety net: if async preview rerender already finished, ensure central toggle is visible.
         if self._preview_render_thread is None and not self._toggle_btn.isVisible():

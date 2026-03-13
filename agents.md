@@ -12,12 +12,12 @@ Ship IOGraph Python + PyQt as production app with stable update flow.
 
 ## Current branch/release policy
 - Primary dev branch: `python-port` in `anatolyzenkov/IOGraph`.
+- Active refactor branch: `refactor/pyqt-architecture` (post-`v2.0.0` architecture work).
 - Java legacy baseline tag is preserved: `java-v1.0.3`.
-- Until signing/notarization and Windows pipeline are ready:
-  - publish only `beta` / `rc`
-  - do not publish stable `v2.0.0`.
+- Stable `v2.0.0` is published (2026-03-12).
+- Future pre-releases should still use `beta` / `rc` tags before next stable.
 - Windows code-signing is postponed for now (test phase).
-- Keep Windows installer flow in RC, but treat SmartScreen bypass as a temporary testing procedure.
+- Windows builds are available, but installation may require manual SmartScreen bypass steps.
 - Pre-release tag naming (required):
   - use zero-padded numeric suffixes for correct GitHub ordering.
   - examples: `v2.0.0-rc.011`, `v2.0.0-rc.012`, `v2.0.0-beta.001`.
@@ -34,36 +34,33 @@ Ship IOGraph Python + PyQt as production app with stable update flow.
 - GitHub Actions:
   - `Python CI` on `python-port` (compile checks).
   - `Release macOS` on tag `v*`.
+  - `Release Windows` on tag `v*`.
 - macOS artifacts:
   - `IOGraph-macos.zip`
   - `IOGraph-macos.dmg` with configured layout.
+- Windows artifacts:
+  - `IOGraph-windows-<version>.zip`
 - Packaging asset path:
   - `packaging/assets/dmg/IOGraphVolume.icns`.
+- Dedicated smoke/update regression workflow is not implemented yet.
 
-## Current working state (2026-03-12)
+## Current working state (2026-03-13)
 - Branch/tag status:
-  - `python-port` is current working branch.
-  - Latest pushed RC tag: `v2.0.0-rc.027`.
-- Runtime bug fixes landed:
-  - Fixed tracking timer corruption after `Reset` while tracking in `iograph/tracker.py`.
-  - Added self-heal for corrupted tracking state when `_tracking=True` but `_run_started_mono=None`.
-  - This addresses symptoms: permanent `Just started`, `t=0` raw timeline, lost large idle circles after rerender/toggle.
-- UX/menu state:
-  - Help menu and tray `More` menu both group external links under `Resources`.
-  - Donation prompts are one-time per event:
+  - `python-port` is release branch.
+  - `refactor/pyqt-architecture` is active development branch.
+  - Stable tag: `v2.0.0` (published).
+  - Last retained RC tag: `v2.0.0-rc.044`.
+  - Old RC tags/releases were cleaned up.
+- Runtime/UX state:
+  - Long-session timer/circle regressions were fixed and validated during RC cycle.
+  - Help menu and tray `More` menu group external links under `Resources`.
+  - Donation prompts are one-time events:
     - first image save
     - first raw data save
   - Donation links include UTM source labels by entry point.
-- macOS release pipeline:
-  - Release upload uses `gh release` with retries (instead of action-only publish path).
-  - Pipeline now includes Developer ID signing + notarization steps via secrets:
-    - `APPLE_CERT_P12_BASE64`
-    - `APPLE_CERT_PASSWORD`
-    - `APPLE_TEAM_ID`
-    - `APPLE_API_KEY_ID`
-    - `APPLE_API_ISSUER_ID`
-    - `APPLE_API_KEY_P8`
-  - First full validation run expected on `v2.0.0-rc.027`.
+- macOS signing/notarization:
+  - Developer ID signing + notarization are active in release pipeline.
+  - Stable notarized artifacts are published for `v2.0.0`.
 
 ## Version source
 - App version resolution order:
@@ -100,22 +97,47 @@ Ship IOGraph Python + PyQt as production app with stable update flow.
   - on startup, if current app version is already >= downloaded version, old downloaded update artifacts are removed.
 
 ## Update flow target (next)
-- Add signed + notarized macOS release pipeline.
-- Replace DMG-assisted install with real updater helper flow:
-  1. download
+- Keep macOS updater helper flow reliable across future releases:
+  1. download ZIP update
   2. close app
   3. replace app in `/Applications`
-  4. relaunch.
-- Add Windows build + installer pipeline and align update UX cross-platform.
+  4. relaunch
+- Keep `.dmg` as manual install path.
+- Add lightweight smoke/update regression CI checks (post-release backlog).
+- Windows code-signing remains postponed.
 
-## Stable release gate (must pass before `v2.0.0`)
-- `v2.0.0` must not be published until macOS real updater flow is implemented and validated on RC builds.
-- macOS updater policy:
-  - automatic/manual update download should prefer `.zip` app package;
-  - install action must use helper flow: quit app -> replace `/Applications/IOGraph.app` -> relaunch;
-  - `.dmg` remains manual fallback path.
-- macOS update menu/tray labels should reflect state clearly:
-  - `Check for Updates...`
-  - `Check for Updates Automatically`
-  - `Install Downloaded Update...` (only when downloaded artifact exists)
+## Refactor track (post-2.0.0)
+- Goal: split monolithic `iograph/main.py` into maintainable PyQt architecture with explicit boundaries.
+- Target structure:
+  - `iograph/ui` for widgets/presentation only.
+  - `iograph/core` for tracking/session/update business logic.
+  - `iograph/app` for bootstrap and wiring.
+  - `iograph/services` for cross-cutting services (`QSettings`, filesystem, etc.).
+- Communication model:
+  - use Qt signals/slots for module-to-module communication;
+  - avoid direct cross-layer state mutation.
+- First milestone:
+  - introduce centralized settings service and migrate raw `QSettings` access behind it without behavior changes.
+
+## Refactor roadmap (ordered, do not skip)
+- Step 1: Foundation (in progress)
+  - [x] Add module skeleton: `app/core/ui/services`.
+  - [x] Add centralized settings wrapper (`AppSettings`, `SettingsKeys`).
+  - [x] Replace most magic settings keys in `main.py` with `SettingsKeys`.
+  - [x] Extract update service/workers/storage/controller into `core`.
+  - [x] Finish update UI decision extraction (prompt text/action branching).
+- Step 2: Tracking/session extraction
+  - [ ] Move tracking/session orchestration from `main.py` into `core/session_controller.py`.
+  - Progress: session timing + period/time text moved to `core/session_controller.py`; session file/chunk storage moved to `core/session_storage.py`.
+  - [ ] Keep `TrackCanvas` rendering in `ui/tracker` or existing module until behavior parity is verified.
+  - [x] Introduce signal-based session events for UI updates.
+- Step 3: Export/render extraction
+  - [ ] Move export and preview rerender orchestration into `core/export_controller.py`.
+  - [ ] Keep UI-specific progress dialogs in `main.py` (temporary), business logic in `core`.
+- Step 4: UI split
+  - [ ] Split monolithic `MainWindow` into smaller UI modules (`ui/main_window.py`, `ui/tray_menu.py`, `ui/settings_panel.py`).
+  - [ ] Keep wiring in `app/bootstrap.py`.
+- Step 5: Stabilization
+  - [ ] Add lightweight regression checks for update + startup in CI.
+  - [ ] Validate behavior parity before merging back to `python-port`.
     
