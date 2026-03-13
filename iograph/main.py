@@ -920,8 +920,8 @@ class MainWindow(QMainWindow):
         tracking = self._canvas.is_tracking()
         if not TrackingUiDecisions.should_show_timer_labels(elapsed_ms, tracking):
             return
-        self._total_time_label.setText(self._build_tracking_time_text(elapsed_ms))
-        self._period_label.setText(self._build_period_label())
+        self._total_time_label.setText(SessionController.tracking_time_text(elapsed_ms))
+        self._period_label.setText(self._session.period_label())
         self._total_time_label.setVisible(True)
         self._period_label.setVisible(True)
         self._reset_btn.setVisible(TrackingUiDecisions.compute_state(elapsed_ms, tracking).reset_button_visible)
@@ -972,12 +972,6 @@ class MainWindow(QMainWindow):
         primary = QGuiApplication.primaryScreen() or screens[0]
         g = primary.geometry()
         return (max(1, g.width()), max(1, g.height()))
-
-    def _build_period_label(self) -> str:
-        return self._session.period_label()
-
-    def _build_tracking_time_text(self, ms: int) -> str:
-        return SessionController.tracking_time_text(ms)
 
     def eventFilter(self, obj, event) -> bool:  # type: ignore[override]
         if obj is self._canvas:
