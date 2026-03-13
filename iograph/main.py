@@ -44,6 +44,7 @@ from .ui.settings_panel import build_settings_panel
 from .ui.support_prompt import show_support_prompt
 from .ui.toggle_button import build_toggle_button
 from .ui.tray_menu import build_tray_menu
+from .ui.tray_window import show_window_on_top, tray_settings_label
 
 class PreviewRenderWorker(QObject):
     progress = pyqtSignal(int, object, float)  # request_id, QImage, pixel_scale
@@ -1505,18 +1506,7 @@ class MainWindow(QMainWindow):
             self._show_on_top()
 
     def _show_on_top(self) -> None:
-        # Robust foreground restore for tray/menu activation across macOS/Windows.
-        state = self.windowState()
-        state &= ~Qt.WindowState.WindowMinimized
-        self.setWindowState(state)
-        if not self.isVisible():
-            self.showNormal()
-        elif self.isMinimized():
-            self.showNormal()
-        self.raise_()
-        self.activateWindow()
-        QTimer.singleShot(0, self.raise_)
-        QTimer.singleShot(0, self.activateWindow)
+        show_window_on_top(self)
 
     def _update_tray_state(self) -> None:
         tray = getattr(self, "_tray_icon", None)
@@ -1529,7 +1519,7 @@ class MainWindow(QMainWindow):
         self._tray_save_image_action.setEnabled(ui_state.can_save)
         self._tray_save_csv_action.setEnabled(ui_state.can_save)
         self._tray_reset_action.setEnabled(ui_state.can_reset)
-        self._tray_settings_action.setText("Hide Settings" if self._setup_btn.isChecked() else "Show Settings")
+        self._tray_settings_action.setText(tray_settings_label(self._setup_btn.isChecked()))
         tray.setIcon(self._tray_state_icon(tracking))
 
     def _sync_ui_state(self) -> None:
