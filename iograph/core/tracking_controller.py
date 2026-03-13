@@ -15,6 +15,12 @@ class TrackingTransition:
     status_message: str
 
 
+@dataclass(frozen=True)
+class ResetRequest:
+    requires_confirmation: bool
+    message: str
+
+
 class TrackingController(QObject):
     tracking_started = pyqtSignal()
     tracking_stopped = pyqtSignal()
@@ -72,3 +78,10 @@ class TrackingController(QObject):
     @staticmethod
     def build_reset_confirmation_message(base_message: str, elapsed_ms: int) -> str:
         return TrackingUiDecisions.extend_reset_message_for_long_tracking(base_message, elapsed_ms)
+
+    @classmethod
+    def build_reset_request(cls, elapsed_ms: int) -> ResetRequest:
+        if not cls.needs_reset_confirmation(elapsed_ms):
+            return ResetRequest(requires_confirmation=False, message="")
+        message = cls.build_reset_confirmation_message("Do you really want to start from scratch?", elapsed_ms)
+        return ResetRequest(requires_confirmation=True, message=message)

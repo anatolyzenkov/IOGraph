@@ -526,8 +526,16 @@ class MainWindow(QMainWindow):
         self._sync_ui_state()
 
     def _reset_canvas(self) -> None:
-        if self._tracking_controller.needs_reset_confirmation(self._canvas.get_elapsed_ms()):
-            if not self._confirm_reset():
+        reset_request = self._tracking_controller.build_reset_request(self._canvas.get_elapsed_ms())
+        if reset_request.requires_confirmation:
+            answer = QMessageBox.question(
+                self,
+                "Reset confirmation",
+                reset_request.message,
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
                 return
         self._perform_reset()
 
@@ -1178,33 +1186,6 @@ class MainWindow(QMainWindow):
         self._request_preview_rerender()
         self._refresh_dpi_dependent_icons()
         self._sync_ui_state()
-
-    def _confirm_reset_for_switch(self, title: str, message: str) -> bool:
-        elapsed = self._canvas.get_elapsed_ms()
-        message = self._tracking_controller.build_reset_confirmation_message(message, elapsed)
-        answer = QMessageBox.question(
-            self,
-            title,
-            message,
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        return answer == QMessageBox.StandardButton.Yes
-
-    def _confirm_reset(self) -> bool:
-        elapsed = self._canvas.get_elapsed_ms()
-        message = self._tracking_controller.build_reset_confirmation_message(
-            "Do you really want to start from scratch?",
-            elapsed,
-        )
-        answer = QMessageBox.question(
-            self,
-            "Reset confirmation",
-            message,
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        return answer == QMessageBox.StandardButton.Yes
 
     def _confirm_exit(self) -> bool:
         # Session is persisted on close, no destructive-exit warning is needed.
