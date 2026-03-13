@@ -132,8 +132,8 @@ Ship IOGraph Python + PyQt as production app with stable update flow.
   - [x] Introduce signal-based session events for UI updates.
   - Note: final behavior parity for start/pause/resume/reset/restore must be confirmed via local manual GUI run.
 - Step 3: Export/render extraction
-  - [ ] Move export and preview rerender orchestration into `core/export_controller.py`.
-  - [ ] Keep UI-specific progress dialogs in `main.py` (temporary), business logic in `core`.
+  - [x] Move export and preview rerender orchestration into `core/export_controller.py`.
+  - [x] Keep UI-specific progress dialogs in `main.py` (temporary), business logic in `core`.
 - Step 4: UI split
   - [ ] Split monolithic `MainWindow` into smaller UI modules (`ui/main_window.py`, `ui/tray_menu.py`, `ui/settings_panel.py`).
   - [ ] Keep wiring in `app/bootstrap.py`.
