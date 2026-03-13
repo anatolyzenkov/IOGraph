@@ -854,10 +854,11 @@ class MainWindow(QMainWindow):
         preview_saved = self._canvas.export_preview_cache(str(self._session_storage.preview_cache_path()))
         desktop_saved = self._canvas.export_desktop_background_cache(str(self._session_storage.desktop_cache_path()))
         raw_storage = self._session_storage.write_raw_chunks(self._canvas.export_raw_samples())
+        session_times = self._tracking_controller.session_timestamps_payload()
         state = {
             "version": 1,
-            "session_started_at": self._session.started_at_iso(),
-            "session_ended_at": self._session.ended_at_iso(),
+            "session_started_at": session_times["session_started_at"],
+            "session_ended_at": session_times["session_ended_at"],
             "raw_storage": raw_storage,
             "render_signature": signature,
             "preview_cache_saved": preview_saved,
@@ -928,7 +929,7 @@ class MainWindow(QMainWindow):
         self._sync_ui_state()
 
     def _build_export_base_name(self) -> str:
-        return self._session.export_base_name(self._canvas.get_elapsed_ms(), app_name="IOGraphica")
+        return self._tracking_controller.export_base_name(self._canvas.get_elapsed_ms(), app_name="IOGraphica")
 
     def _set_tracking(self, enabled: bool) -> None:
         transition = self._tracking_controller.set_tracking_with_callbacks(

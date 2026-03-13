@@ -95,6 +95,15 @@ class TrackingController(QObject):
     def period_label(self) -> str:
         return self._session.period_label()
 
+    def export_base_name(self, elapsed_ms: int, app_name: str = "IOGraphica") -> str:
+        return self._session.export_base_name(elapsed_ms, app_name=app_name)
+
+    def session_timestamps_payload(self) -> dict[str, str | None]:
+        return {
+            "session_started_at": self._session.started_at_iso(),
+            "session_ended_at": self._session.ended_at_iso(),
+        }
+
     @staticmethod
     def needs_reset_confirmation(elapsed_ms: int) -> bool:
         return elapsed_ms > 0
