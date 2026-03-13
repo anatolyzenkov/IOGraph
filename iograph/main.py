@@ -718,7 +718,15 @@ class MainWindow(QMainWindow):
             self._canvas.load_raw_samples(raw_samples, rebuild=False)
         if SessionRestoreDecisions.should_try_preview_cache(payload, use_cache):
             loaded_preview_cache = self._canvas.load_preview_cache(str(self._session_storage.preview_cache_path()))
+        elif payload.get("preview_cache_saved", False):
+            # Signature can drift across restarts while cached image remains perfectly reusable by size.
+            loaded_preview_cache = self._canvas.load_preview_cache(str(self._session_storage.preview_cache_path()))
         if SessionRestoreDecisions.should_try_desktop_cache(payload, use_cache, use_desktop_bg):
+            loaded_desktop_cache = self._canvas.load_desktop_background_cache(
+                str(self._session_storage.desktop_cache_path())
+            )
+        elif use_desktop_bg and payload.get("desktop_cache_saved", False):
+            # Prefer already saved snapshot when geometry still matches; recapture only as fallback.
             loaded_desktop_cache = self._canvas.load_desktop_background_cache(
                 str(self._session_storage.desktop_cache_path())
             )
