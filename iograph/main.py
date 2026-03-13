@@ -13,7 +13,6 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QFileDialog,
     QGraphicsOpacityEffect,
-    QGridLayout,
     QHBoxLayout,
     QLabel,
     QMainWindow,
@@ -40,6 +39,7 @@ from .core.update_workers import MacZipInstallWorker
 from .services.settings import AppSettings, SettingsKeys
 from .ui.icon_loader import build_app_icon
 from .ui.menu_builder import build_main_menu
+from .ui.settings_panel import build_settings_panel
 from .ui.support_prompt import show_support_prompt
 from .ui.tray_menu import build_tray_menu
 
@@ -252,49 +252,18 @@ class MainWindow(QMainWindow):
         front_layout.addWidget(self._period_label, stretch=0)
         front_layout.setAlignment(self._period_label, Qt.AlignmentFlag.AlignTop)
 
-        control_layout = QGridLayout(self._control_panel)
-        control_layout.setContentsMargins(8, 0, 0, 0)
-        control_layout.setHorizontalSpacing(24)
-        control_layout.setVerticalSpacing(0)
-
-        self._ignore_stops_box = QCheckBox("Ignore Mouse Stops", self._control_panel)
-        control_layout.setAlignment(self._ignore_stops_box, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        control_layout.addWidget(self._ignore_stops_box, 0, 0)
-        desktop_row = QWidget(self._control_panel)
-        desktop_row_layout = QHBoxLayout(desktop_row)
-        desktop_row_layout.setContentsMargins(0, 0, 0, 0)
-        desktop_row_layout.setSpacing(6)
-        self._use_desktop_box = QCheckBox("Use Desktop", desktop_row)
-        desktop_row_layout.addWidget(self._use_desktop_box, 0)
-        self._update_desktop_btn = QPushButton(desktop_row)
-        self._update_desktop_btn.clicked.connect(self._refresh_desktop_snapshot)
-        self._update_desktop_btn.setFixedSize(18, 18)
-        self._update_desktop_btn.setIconSize(QSize(18, 18))
-        self._update_desktop_btn.setFlat(True)
-        self._update_desktop_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding-top: 2px; }")
-        self._update_desktop_btn.setIcon(self._icon("UpdateDesktopDisabledBtn.png"))
-        self._update_desktop_btn.pressed.connect(self._on_update_desktop_pressed)
-        self._update_desktop_btn.released.connect(self._on_update_desktop_released)
-        size_policy = self._update_desktop_btn.sizePolicy()
-        size_policy.setRetainSizeWhenHidden(True)
-        self._update_desktop_btn.setSizePolicy(size_policy)
-        self._update_desktop_btn.setVisible(False)
-        desktop_row_layout.addWidget(self._update_desktop_btn, 0)
-        desktop_row_layout.addStretch(1)
-        control_layout.setAlignment(desktop_row, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        control_layout.addWidget(desktop_row, 0, 1)
-        self._multi_monitor_box = QCheckBox("Use Multiple Monitors", self._control_panel)
-        control_layout.setAlignment(self._multi_monitor_box, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        control_layout.addWidget(self._multi_monitor_box, 1, 0)
-        colorful_row = QWidget(self._control_panel)
-        colorful_row_layout = QHBoxLayout(colorful_row)
-        colorful_row_layout.setContentsMargins(0, 0, 0, 0)
-        colorful_row_layout.setSpacing(0)
-        self._colorful_box = QCheckBox("Use Colorful Scheme", colorful_row)
-        colorful_row_layout.addWidget(self._colorful_box, 0)
-        colorful_row_layout.addStretch(1)
-        control_layout.setAlignment(colorful_row, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        control_layout.addWidget(colorful_row, 1, 1)
+        panel_refs = build_settings_panel(
+            self._control_panel,
+            on_refresh_desktop_snapshot=self._refresh_desktop_snapshot,
+            on_update_desktop_pressed=self._on_update_desktop_pressed,
+            on_update_desktop_released=self._on_update_desktop_released,
+            icon_loader=self._icon,
+        )
+        self._ignore_stops_box = panel_refs.ignore_stops_box
+        self._use_desktop_box = panel_refs.use_desktop_box
+        self._update_desktop_btn = panel_refs.update_desktop_btn
+        self._multi_monitor_box = panel_refs.multi_monitor_box
+        self._colorful_box = panel_refs.colorful_box
 
         self._secondary_panel = QWidget(self._bottom_panel)
         secondary_layout = QVBoxLayout(self._secondary_panel)
