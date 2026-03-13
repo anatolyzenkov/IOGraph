@@ -27,6 +27,7 @@ from .app.bootstrap import run_app
 from .app.signals import AppSignals
 from .core.update_controller import UpdateController
 from .core.session_controller import SessionController
+from .core.session_cache_restore import restore_session_caches
 from .core.session_restore_decisions import SessionRestoreDecisions
 from .core.session_storage import SessionStorage
 from .core.export_controller import ExportController
@@ -712,27 +713,20 @@ class MainWindow(QMainWindow):
         signature = payload.get("render_signature")
         use_cache = signature == self._canvas.render_cache_signature()
         use_desktop_bg = self._use_desktop_action.isChecked()
-        loaded_preview_cache = False
-        loaded_desktop_cache = False
         if raw_samples:
             self._canvas.load_raw_samples(raw_samples, rebuild=False)
-        if SessionRestoreDecisions.should_try_preview_cache(payload, use_cache):
-            loaded_preview_cache = self._canvas.load_preview_cache(str(self._session_storage.preview_cache_path()))
-        elif payload.get("preview_cache_saved", False):
-            # Signature can drift across restarts while cached image remains perfectly reusable by size.
-            loaded_preview_cache = self._canvas.load_preview_cache(str(self._session_storage.preview_cache_path()))
-        if SessionRestoreDecisions.should_try_desktop_cache(payload, use_cache, use_desktop_bg):
-            loaded_desktop_cache = self._canvas.load_desktop_background_cache(
-                str(self._session_storage.desktop_cache_path())
-            )
-        elif use_desktop_bg and payload.get("desktop_cache_saved", False):
-            # Prefer already saved snapshot when geometry still matches; recapture only as fallback.
-            loaded_desktop_cache = self._canvas.load_desktop_background_cache(
-                str(self._session_storage.desktop_cache_path())
-            )
-        if SessionRestoreDecisions.needs_preview_rerender(loaded_preview_cache):
+        cache_restore = restore_session_caches(
+            payload=payload,
+            use_cache=use_cache,
+            use_desktop_background=use_desktop_bg,
+            preview_cache_path=self._session_storage.preview_cache_path(),
+            desktop_cache_path=self._session_storage.desktop_cache_path(),
+            load_preview_cache=self._canvas.load_preview_cache,
+            load_desktop_cache=self._canvas.load_desktop_background_cache,
+        )
+        if SessionRestoreDecisions.needs_preview_rerender(cache_restore.loaded_preview_cache):
             self._request_preview_rerender()
-        if SessionRestoreDecisions.needs_desktop_refresh(use_desktop_bg, loaded_desktop_cache):
+        if SessionRestoreDecisions.needs_desktop_refresh(use_desktop_bg, cache_restore.loaded_desktop_cache):
             self._refresh_desktop_snapshot()
 
         started_raw = payload.get("session_started_at")
