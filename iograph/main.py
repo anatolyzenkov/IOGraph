@@ -602,7 +602,7 @@ class MainWindow(QMainWindow):
         )
         self._export_thread = thread
         self._export_worker = worker
-        self._status("Exporting image...")
+        self._status(ExportController.export_start_status())
         export_ui = ExportController.ui_state(export_in_progress=True)
         self._save_btn.setEnabled(export_ui.can_save_image)
         self._save_image_action.setEnabled(export_ui.can_save_image)
@@ -612,7 +612,7 @@ class MainWindow(QMainWindow):
         thread.start()
 
     def _on_export_finished(self, ok: bool, _path: str) -> None:
-        self._status("Image saved" if ok else "Failed to save image")
+        self._status(ExportController.export_finished_status(ok))
         if ok:
             self._maybe_prompt_support_after_first_image_save()
         self._sync_ui_state()
@@ -714,21 +714,21 @@ class MainWindow(QMainWindow):
         )
         self._preview_render_thread = thread
         self._preview_render_worker = worker
-        self._status("Rendering preview...")
+        self._status(ExportController.preview_rendering_status())
         thread.start()
 
     def _on_preview_rerender_progress(self, request_id: int, image: QImage, pixel_scale: float) -> None:
         if request_id != self._preview_active_request_id:
             return
         self._canvas.apply_preview_image(image, pixel_scale)
-        self._status("Rendering preview...")
+        self._status(ExportController.preview_rendering_status())
 
     def _on_preview_rerender_ready(self, request_id: int, image: QImage, pixel_scale: float) -> None:
         if request_id != self._preview_active_request_id:
             return
         if not self._canvas.apply_preview_image(image, pixel_scale):
             self._canvas.rebuild_from_raw_samples()
-        self._status("Preview rendered")
+        self._status(ExportController.preview_rendered_status())
         self._sync_ui_state()
 
     def _on_preview_rerender_failed(self, _error: str) -> None:

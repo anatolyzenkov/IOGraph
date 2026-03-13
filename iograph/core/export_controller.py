@@ -31,6 +31,22 @@ class ExportController:
         return ExportUiState(can_save_image=not export_in_progress)
 
     @staticmethod
+    def export_start_status() -> str:
+        return "Exporting image..."
+
+    @staticmethod
+    def export_finished_status(ok: bool) -> str:
+        return "Image saved" if ok else "Failed to save image"
+
+    @staticmethod
+    def preview_rendering_status() -> str:
+        return "Rendering preview..."
+
+    @staticmethod
+    def preview_rendered_status() -> str:
+        return "Preview rendered"
+
+    @staticmethod
     def create_export_worker(
         parent,
         *,
