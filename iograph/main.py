@@ -613,7 +613,7 @@ class MainWindow(QMainWindow):
 
     def _on_export_finished(self, ok: bool, _path: str) -> None:
         self._status(ExportController.export_finished_status(ok))
-        if ok:
+        if ExportController.should_prompt_support_after_image_save(ok):
             self._maybe_prompt_support_after_first_image_save()
         self._sync_ui_state()
 

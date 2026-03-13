@@ -39,6 +39,10 @@ class ExportController:
         return "Image saved" if ok else "Failed to save image"
 
     @staticmethod
+    def should_prompt_support_after_image_save(ok: bool) -> bool:
+        return bool(ok)
+
+    @staticmethod
     def preview_rendering_status() -> str:
         return "Rendering preview..."
 
