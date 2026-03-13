@@ -21,6 +21,12 @@ class ResetRequest:
     message: str
 
 
+@dataclass(frozen=True)
+class ResetApplyResult:
+    reset_performed: bool
+    was_tracking: bool
+
+
 class TrackingController(QObject):
     tracking_started = pyqtSignal()
     tracking_stopped = pyqtSignal()
@@ -89,3 +95,20 @@ class TrackingController(QObject):
             return ResetRequest(requires_confirmation=False, message="")
         message = cls.build_reset_confirmation_message("Do you really want to start from scratch?", elapsed_ms)
         return ResetRequest(requires_confirmation=True, message=message)
+
+    def apply_reset_decision_with_callbacks(
+        self,
+        *,
+        user_confirmed: bool,
+        is_tracking: bool,
+        on_canvas_reset: Callable[[], None],
+        on_clear_session_state: Callable[[], None],
+    ) -> ResetApplyResult:
+        if not user_confirmed:
+            return ResetApplyResult(reset_performed=False, was_tracking=is_tracking)
+        self.apply_reset_with_callbacks(
+            is_tracking,
+            on_canvas_reset=on_canvas_reset,
+            on_clear_session_state=on_clear_session_state,
+        )
+        return ResetApplyResult(reset_performed=True, was_tracking=is_tracking)

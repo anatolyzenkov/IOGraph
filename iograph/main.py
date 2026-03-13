@@ -527,6 +527,7 @@ class MainWindow(QMainWindow):
 
     def _reset_canvas(self) -> None:
         reset_request = self._tracking_controller.build_reset_request(self._canvas.get_elapsed_ms())
+        user_confirmed = True
         if reset_request.requires_confirmation:
             answer = QMessageBox.question(
                 self,
@@ -535,17 +536,18 @@ class MainWindow(QMainWindow):
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
             )
-            if answer != QMessageBox.StandardButton.Yes:
-                return
-        self._perform_reset()
-
-    def _perform_reset(self) -> None:
-        is_tracking = self._canvas.is_tracking()
-        self._tracking_controller.apply_reset_with_callbacks(
-            is_tracking,
+            user_confirmed = answer == QMessageBox.StandardButton.Yes
+        result = self._tracking_controller.apply_reset_decision_with_callbacks(
+            user_confirmed=user_confirmed,
+            is_tracking=self._canvas.is_tracking(),
             on_canvas_reset=self._canvas.reset,
             on_clear_session_state=self._clear_session_state,
         )
+        if not result.reset_performed:
+            return
+        self._perform_reset_post_ui()
+
+    def _perform_reset_post_ui(self) -> None:
         self._total_time_label.setText("Total Time")
         self._period_label.setText("Time Period")
         self._total_time_label.setVisible(False)
