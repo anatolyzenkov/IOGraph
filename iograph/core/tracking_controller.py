@@ -48,6 +48,8 @@ class TrackingController(QObject):
 
     def apply_reset(self, was_tracking: bool) -> None:
         if was_tracking:
+            # Reset while tracking should start a brand new session window.
+            self._session.reset()
             self._session.start_tracking()
         else:
             self._session.reset()
