@@ -810,13 +810,15 @@ class MainWindow(QMainWindow):
         return (max(1, g.width()), max(1, g.height()))
 
     def eventFilter(self, obj, event) -> bool:  # type: ignore[override]
-        if obj is self._canvas:
+        canvas = getattr(self, "_canvas", None)
+        panels_viewport = getattr(self, "_panels_viewport", None)
+        if obj is canvas:
             event_type = event.type()
             if event_type == QEvent.Type.Resize:
                 self._position_toggle_button()
             elif event_type in (QEvent.Type.MouseMove, QEvent.Type.Enter, QEvent.Type.Leave):
                 self._update_toggle_hover_state()
-        elif obj is self._panels_viewport and event.type() == QEvent.Type.Resize:
+        elif obj is panels_viewport and event.type() == QEvent.Type.Resize:
             self._resize_panels_for_viewport()
             self._update_panel_positions()
         return super().eventFilter(obj, event)
