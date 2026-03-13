@@ -39,6 +39,7 @@ from .core.update_storage import UpdateStorageManager
 from .core.update_ui_decisions import UpdateUiDecisions
 from .core.update_workers import MacZipInstallWorker
 from .services.settings import AppSettings, SettingsKeys
+from .ui.icon_loader import build_app_icon
 
 _windows_single_instance_lock: QLockFile | None = None
 
@@ -1124,15 +1125,7 @@ class MainWindow(QMainWindow):
         return ignores < self._UPDATE_BADGE_MAX_IGNORES
 
     def _app_icon(self) -> QIcon:
-        icon = QIcon()
-        for name in self._APP_ICON_FILES:
-            path = self._RESOURCE_DIR / name
-            if path.exists():
-                icon.addFile(str(path))
-            hi = self._RESOURCE_DIR / f"{path.stem}@2x{path.suffix}"
-            if hi.exists():
-                icon.addFile(str(hi))
-        return icon
+        return build_app_icon(self._RESOURCE_DIR, self._APP_ICON_FILES)
 
     def _resource_file_for_dpi(self, name: str) -> Path:
         base = self._RESOURCE_DIR / name
