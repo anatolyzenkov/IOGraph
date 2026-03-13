@@ -32,6 +32,7 @@ from .app.signals import AppSignals
 from .core.update_controller import UpdateController
 from .core.session_controller import SessionController
 from .core.session_storage import SessionStorage
+from .core.tracking_controller import TrackingController
 from .core.tracking_ui_decisions import TrackingUiDecisions
 from .core.update_storage import UpdateStorageManager
 from .core.update_ui_decisions import UpdateUiDecisions
@@ -121,6 +122,7 @@ class MainWindow(QMainWindow):
         self._session.tracking_stopped.connect(lambda: self._signals.session_tracking_stopped.emit())
         self._session.session_reset.connect(lambda: self._signals.session_reset.emit())
         self._session.session_restored.connect(lambda: self._signals.session_restored.emit())
+        self._tracking_controller = TrackingController(self._session, self)
         self._session_storage = SessionStorage(self._SESSION_STATE_FILE, self._SESSION_CHUNK_MS)
         self._suppress_option_handlers = False
         self._force_quit_requested = False
@@ -532,10 +534,7 @@ class MainWindow(QMainWindow):
         is_tracking = self._canvas.is_tracking()
         self._canvas.reset()
         self._clear_session_state()
-        if is_tracking:
-            self._session.start_tracking()
-        else:
-            self._session.reset()
+        self._tracking_controller.apply_reset(is_tracking)
         self._total_time_label.setText("Total Time")
         self._period_label.setText("Time Period")
         self._total_time_label.setVisible(False)
@@ -935,18 +934,15 @@ class MainWindow(QMainWindow):
         return f"IOGraphica - {time_label} ({period_for_file})"
 
     def _set_tracking(self, enabled: bool) -> None:
-        if enabled:
-            self._session.start_tracking()
+        transition = self._tracking_controller.set_tracking(enabled)
+        if transition.enabled:
             self._canvas.start_tracking()
             self._toggle_btn.setChecked(True)
-            self._sync_ui_state()
-            self._status("Tracking started")
-            return
-        self._canvas.stop_tracking()
-        self._session.stop_tracking()
-        self._toggle_btn.setChecked(False)
+        else:
+            self._canvas.stop_tracking()
+            self._toggle_btn.setChecked(False)
         self._sync_ui_state()
-        self._status("Tracking stopped")
+        self._status(transition.status_message)
 
     def _toggle_setup_panel(self, checked: bool) -> None:
         self._panel_anim_direction = 1 if checked else -1
