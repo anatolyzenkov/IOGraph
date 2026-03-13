@@ -7,14 +7,13 @@ import subprocess
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from PyQt6.QtCore import QEvent, QLockFile, QObject, QSize, Qt, QThread, QTimer, QStandardPaths, QUrl, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QAction, QColor, QCursor, QDesktopServices, QFont, QGuiApplication, QIcon, QImage, QPainter
+from PyQt6.QtGui import QAction, QColor, QCursor, QDesktopServices, QGuiApplication, QIcon, QImage, QPainter
 from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
     QFileDialog,
     QGraphicsOpacityEffect,
     QHBoxLayout,
-    QLabel,
     QMainWindow,
     QMessageBox,
     QProgressDialog,
@@ -39,6 +38,7 @@ from .core.update_workers import MacZipInstallWorker
 from .services.settings import AppSettings, SettingsKeys
 from .ui.icon_loader import build_app_icon
 from .ui.menu_builder import build_main_menu
+from .ui.panel_widgets import build_front_panel, build_secondary_panel
 from .ui.settings_panel import build_settings_panel
 from .ui.support_prompt import show_support_prompt
 from .ui.tray_menu import build_tray_menu
@@ -211,46 +211,15 @@ class MainWindow(QMainWindow):
         self._toggle_fade_timer.timeout.connect(self._animate_toggle_opacity)
         self._toggle_fade_timer.start()
 
-        front_layout = QVBoxLayout(self._front_panel)
-        front_layout.setContentsMargins(28, 5, 0, 5)
-        front_layout.setSpacing(0)
-
-        top_row = QHBoxLayout()
-        top_row.setContentsMargins(0, 0, 0, 0)
-        top_row.setSpacing(5)
-        front_layout.addLayout(top_row)
-
-        self._total_time_label = QLabel("Total Time", self._front_panel)
-        total_time_font_size = 24 if sys.platform.startswith("win") else 30
-        self._total_time_label.setFont(QFont(self._total_time_label.font().family(), total_time_font_size))
-        self._total_time_label.setFixedHeight(36)
-        self._total_time_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        self._total_time_label.setVisible(False)
-        top_row.addStretch(1)
-        top_row.addWidget(self._total_time_label, stretch=0)
-
-        self._reset_btn = QPushButton(self._front_panel)
-        self._reset_btn.clicked.connect(self._reset_canvas)
-        self._reset_btn.setVisible(False)
-        self._reset_btn.setFixedSize(19, 28)
-        self._reset_btn.setIconSize(QSize(19, 19))
-        self._reset_btn.setFlat(True)
-        self._reset_btn.setStyleSheet("QPushButton { border: none; background: transparent; padding-top: 8px; }")
-        self._reset_btn.setIcon(self._icon("ResetBtn.png"))
-        self._reset_btn.pressed.connect(lambda: self._reset_btn.setIcon(self._icon("ResetPressedBtn.png")))
-        self._reset_btn.released.connect(lambda: self._reset_btn.setIcon(self._icon("ResetBtn.png")))
-        top_row.addWidget(self._reset_btn, stretch=0)
-        top_row.setAlignment(self._reset_btn, Qt.AlignmentFlag.AlignVCenter)
-        top_row.addStretch(1)
-
-        self._period_label = QLabel("Time Period", self._front_panel)
-        period_font_size = 10 if sys.platform.startswith("win") else 12
-        self._period_label.setFont(QFont(self._period_label.font().family(), period_font_size))
-        self._period_label.setFixedHeight(16)
-        self._period_label.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
-        self._period_label.setVisible(False)
-        front_layout.addWidget(self._period_label, stretch=0)
-        front_layout.setAlignment(self._period_label, Qt.AlignmentFlag.AlignTop)
+        front_refs = build_front_panel(
+            self._front_panel,
+            on_reset=self._reset_canvas,
+            icon_loader=self._icon,
+            is_windows=sys.platform.startswith("win"),
+        )
+        self._total_time_label = front_refs.total_time_label
+        self._reset_btn = front_refs.reset_btn
+        self._period_label = front_refs.period_label
 
         panel_refs = build_settings_panel(
             self._control_panel,
@@ -266,41 +235,23 @@ class MainWindow(QMainWindow):
         self._colorful_box = panel_refs.colorful_box
 
         self._secondary_panel = QWidget(self._bottom_panel)
-        secondary_layout = QVBoxLayout(self._secondary_panel)
-        secondary_layout.setContentsMargins(0, 5, 0, 10)
-        secondary_layout.setSpacing(4)
-        self._save_btn = QPushButton(self._secondary_panel)
-        self._save_btn.clicked.connect(self._save_image)
-        self._save_btn.setEnabled(False)
-        self._save_btn.setFixedSize(19, 18)
-        self._save_btn.setIconSize(QSize(15, 15))
-        self._save_btn.setFlat(True)
-        self._save_btn.setStyleSheet("QPushButton { border: none; background: transparent; }")
-        self._save_btn.setIcon(self._icon("SaveDisabledBtn.png"))
-        self._save_btn.pressed.connect(self._on_save_pressed)
-        self._save_btn.released.connect(self._on_save_released)
-        secondary_layout.addWidget(self._save_btn)
-        self._setup_btn = QPushButton(self._secondary_panel)
-        self._setup_btn.setCheckable(True)
-        self._setup_btn.setFixedSize(19, 18)
-        self._setup_btn.setIconSize(QSize(15, 15))
-        self._setup_btn.setFlat(True)
-        self._setup_btn.setStyleSheet("QPushButton { border: none; background: transparent; }")
-        self._setup_btn.setIcon(self._icon("SetupBtn.png"))
-        self._setup_btn.pressed.connect(self._on_setup_pressed)
-        self._setup_btn.released.connect(self._on_setup_released)
-        self._setup_btn.toggled.connect(self._toggle_setup_panel)
-        secondary_layout.addWidget(self._setup_btn)
-        self._url_btn = QPushButton(self._secondary_panel)
-        self._url_btn.setFixedSize(19, 18)
-        self._url_btn.setIconSize(QSize(15, 15))
-        self._url_btn.setFlat(True)
-        self._url_btn.setStyleSheet("QPushButton { border: none; background: transparent; }")
-        self._url_btn.setIcon(self._heart_icon("HeartBtn.png"))
-        self._url_btn.pressed.connect(self._on_url_pressed)
-        self._url_btn.released.connect(self._on_url_released)
-        self._url_btn.clicked.connect(lambda: self._open_support_url("main_support_button"))
-        secondary_layout.addWidget(self._url_btn)
+        secondary_refs = build_secondary_panel(
+            self._secondary_panel,
+            on_save_image=self._save_image,
+            on_save_pressed=self._on_save_pressed,
+            on_save_released=self._on_save_released,
+            on_setup_pressed=self._on_setup_pressed,
+            on_setup_released=self._on_setup_released,
+            on_toggle_setup_panel=self._toggle_setup_panel,
+            on_url_pressed=self._on_url_pressed,
+            on_url_released=self._on_url_released,
+            on_open_support=lambda: self._open_support_url("main_support_button"),
+            icon_loader=self._icon,
+            heart_icon_loader=self._heart_icon,
+        )
+        self._save_btn = secondary_refs.save_btn
+        self._setup_btn = secondary_refs.setup_btn
+        self._url_btn = secondary_refs.url_btn
         bottom_layout.addWidget(self._secondary_panel, stretch=0)
 
         self._resize_panels_for_viewport()
