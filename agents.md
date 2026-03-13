@@ -155,6 +155,6 @@ Ship IOGraph Python + PyQt as production app with stable update flow.
   - Remaining (optional next refactor wave):
     - move remaining `MainWindow` orchestration into `ui/main_window.py` + presenter/service layer split.
 - Step 5: Stabilization
-  - [~] Add lightweight regression checks for update + startup in CI.
-  - [ ] Validate behavior parity before merging back to `python-port`.
+  - [x] Add lightweight regression checks for update + startup in CI.
+  - [x] Validate behavior parity before merging back to `python-port` (manual pass done; full `Install Downloaded Update` path to be rechecked on next RC with a fresh release).
     
