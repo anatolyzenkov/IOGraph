@@ -525,7 +525,7 @@ class MainWindow(QMainWindow):
         self._sync_ui_state()
 
     def _reset_canvas(self) -> None:
-        if self._canvas.get_elapsed_ms() > 0:
+        if self._tracking_controller.needs_reset_confirmation(self._canvas.get_elapsed_ms()):
             if not self._confirm_reset():
                 return
         self._perform_reset()
@@ -1188,7 +1188,7 @@ class MainWindow(QMainWindow):
 
     def _confirm_reset_for_switch(self, title: str, message: str) -> bool:
         elapsed = self._canvas.get_elapsed_ms()
-        message = TrackingUiDecisions.extend_reset_message_for_long_tracking(message, elapsed)
+        message = self._tracking_controller.build_reset_confirmation_message(message, elapsed)
         answer = QMessageBox.question(
             self,
             title,
@@ -1200,7 +1200,7 @@ class MainWindow(QMainWindow):
 
     def _confirm_reset(self) -> bool:
         elapsed = self._canvas.get_elapsed_ms()
-        message = TrackingUiDecisions.extend_reset_message_for_long_tracking(
+        message = self._tracking_controller.build_reset_confirmation_message(
             "Do you really want to start from scratch?",
             elapsed,
         )

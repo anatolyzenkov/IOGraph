@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from PyQt6.QtCore import QObject, pyqtSignal
 
 from .session_controller import SessionController
+from .tracking_ui_decisions import TrackingUiDecisions
 
 
 @dataclass(frozen=True)
@@ -37,3 +38,11 @@ class TrackingController(QObject):
         else:
             self._session.reset()
         self.tracking_reset.emit()
+
+    @staticmethod
+    def needs_reset_confirmation(elapsed_ms: int) -> bool:
+        return elapsed_ms > 0
+
+    @staticmethod
+    def build_reset_confirmation_message(base_message: str, elapsed_ms: int) -> str:
+        return TrackingUiDecisions.extend_reset_message_for_long_tracking(base_message, elapsed_ms)
