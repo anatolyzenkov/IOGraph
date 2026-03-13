@@ -550,8 +550,6 @@ class TrackCanvas(QWidget):
 
     def set_use_desktop_background(self, value: bool) -> None:
         self._use_desktop_background = value
-        if value and self._desktop_background_source is None:
-            self.update_desktop_background()
         self.update()
 
     def set_use_multiple_monitors(self, value: bool, rebuild: bool = True) -> None:
@@ -559,8 +557,6 @@ class TrackCanvas(QWidget):
         self._refresh_desktop_geometry()
         self._update_projection()
         self._ensure_buffers()
-        if self._use_desktop_background:
-            self.update_desktop_background()
         if rebuild:
             self._rebuild_from_raw_samples()
 

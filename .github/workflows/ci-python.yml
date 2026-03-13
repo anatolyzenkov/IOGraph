@@ -6,6 +6,7 @@ on:
       - python-port
     paths:
       - "iograph/**"
+      - "scripts/**"
       - "requirements.txt"
       - ".github/workflows/ci-python.yml"
       - ".github/workflows/release-macos.yml"
@@ -15,6 +16,7 @@ on:
       - python-port
     paths:
       - "iograph/**"
+      - "scripts/**"
       - "requirements.txt"
       - ".github/workflows/ci-python.yml"
       - ".github/workflows/release-macos.yml"
@@ -44,3 +46,6 @@ jobs:
 
       - name: Compile check
         run: python -m compileall iograph
+
+      - name: Smoke regression check
+        run: python scripts/smoke_regression.py
