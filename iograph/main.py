@@ -35,6 +35,7 @@ from .core.tracking_controller import TrackingController
 from .core.update_storage import UpdateStorageManager
 from .core.update_ui_decisions import UpdateUiDecisions
 from .core.update_workers import MacZipInstallWorker
+from .services.i18n import I18nService
 from .services.settings import AppSettings, SettingsKeys
 from .ui.icon_loader import build_app_icon
 from .ui.desktop_snapshot_controller import DesktopSnapshotController
@@ -115,6 +116,7 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self._settings = AppSettings()
+        self._i18n = I18nService(self._settings)
         self._signals = AppSignals()
         self._update_storage = UpdateStorageManager(self._settings, self._UPDATE_STAGING_TTL_SECONDS)
         self._update_controller = UpdateController(self)
@@ -1510,6 +1512,9 @@ class MainWindow(QMainWindow):
             self._toggle_btn.setVisible(True)
 
         self._update_tray_state()
+
+    def _t(self, source_text: str) -> str:
+        return self._i18n.tr(source_text)
 
 
 def main() -> None:
