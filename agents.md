@@ -135,8 +135,19 @@ Ship IOGraph Python + PyQt as production app with stable update flow.
   - [x] Move export and preview rerender orchestration into `core/export_controller.py`.
   - [x] Keep UI-specific progress dialogs in `main.py` (temporary), business logic in `core`.
 - Step 4: UI split
-  - [ ] Split monolithic `MainWindow` into smaller UI modules (`ui/main_window.py`, `ui/tray_menu.py`, `ui/settings_panel.py`).
-  - [ ] Keep wiring in `app/bootstrap.py`.
+  - [~] Split monolithic `MainWindow` into smaller UI modules.
+  - Extracted so far:
+    - `ui/tray_menu.py`
+    - `ui/menu_builder.py`
+    - `ui/icon_loader.py`
+    - `ui/settings_panel.py`
+    - `ui/panel_widgets.py`
+    - `ui/layout_scaffold.py`
+    - `ui/toggle_button.py`
+    - `ui/support_prompt.py`
+  - [x] Keep startup/single-instance wiring in `app/bootstrap.py`.
+  - Remaining:
+    - final `MainWindow` decomposition (`ui/main_window.py` or equivalent presenter split) without behavior regressions.
 - Step 5: Stabilization
   - [ ] Add lightweight regression checks for update + startup in CI.
   - [ ] Validate behavior parity before merging back to `python-port`.
