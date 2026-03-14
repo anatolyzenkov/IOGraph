@@ -280,7 +280,7 @@ class MainWindow(QMainWindow):
         self._sync_ui_state()
         if self._auto_update_action.isChecked():
             QTimer.singleShot(1200, lambda: self._check_for_updates(manual=False))
-        self._status(self._t("Ready"))
+        self._status(self._t("app.ready"))
 
     def _setup_actions(self) -> None:
         refs = build_main_menu(
@@ -329,7 +329,7 @@ class MainWindow(QMainWindow):
             return
         self._tray_icon = QSystemTrayIcon(self)
         self._tray_icon.setIcon(self._tray_state_icon(tracking=False))
-        tray_exit_label = self._t("Exit") if sys.platform.startswith("win") else self._t("Quit")
+        tray_exit_label = self._t("app.exit") if sys.platform.startswith("win") else self._t("app.quit")
         refs = build_tray_menu(
             self,
             tr=self._t,
@@ -396,7 +396,7 @@ class MainWindow(QMainWindow):
         if reset_request.requires_confirmation:
             answer = QMessageBox.question(
                 self,
-                self._t("Reset confirmation"),
+                self._t("session.reset_confirmation"),
                 reset_request.message,
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
@@ -413,24 +413,24 @@ class MainWindow(QMainWindow):
         self._perform_reset_post_ui()
 
     def _perform_reset_post_ui(self) -> None:
-        self._total_time_label.setText(self._t("Total Time"))
-        self._period_label.setText(self._t("Time Period"))
+        self._total_time_label.setText(self._t("session.total_time"))
+        self._period_label.setText(self._t("session.time_period"))
         self._total_time_label.setVisible(False)
         self._period_label.setVisible(False)
         self._reset_btn.setVisible(False)
         self._sync_ui_state()
-        self._status(self._t("Canvas reset"))
+        self._status(self._t("session.canvas_reset"))
 
     def _save_image(self) -> None:
         if self._export_thread is not None:
-            self._status(self._t("Export is already running"))
+            self._status(self._t("export.already_running"))
             return
         default_dir = self._default_save_dir()
         path, _ = QFileDialog.getSaveFileName(
             self,
-            self._t("Save image"),
+            self._t("save.image.dialog_title"),
             str(default_dir / f"{self._build_export_base_name()}.png"),
-            self._t("PNG image (*.png)"),
+            self._t("save.image.filter_png"),
         )
         if not path:
             return
@@ -442,16 +442,16 @@ class MainWindow(QMainWindow):
         default_dir = self._default_save_dir()
         path, _ = QFileDialog.getSaveFileName(
             self,
-            self._t("Save Raw Data"),
+            self._t("save.raw.dialog_title"),
             str(default_dir / f"{self._build_export_base_name()}.csv"),
-            self._t("CSV file (*.csv)"),
+            self._t("save.raw.filter_csv"),
         )
         if not path:
             return
         csv_path = ExportController.ensure_csv_path(path)
         self._remember_save_dir(csv_path.parent)
         csv_path.write_text(self._canvas.export_csv_text(), encoding="utf-8")
-        self._status(self._t("CSV saved"))
+        self._status(self._t("save.csv_saved"))
         self._maybe_prompt_support_after_first_raw_save()
         self._sync_ui_state()
 
@@ -485,18 +485,18 @@ class MainWindow(QMainWindow):
     def _maybe_prompt_support_after_first_image_save(self) -> None:
         self._maybe_prompt_support(
             key=self._PROMPT_FIRST_IMAGE_SAVE_KEY,
-            title=self._t("First Graphic Saved"),
-            text=self._t("Done - your first IOGraph is saved."),
-            informative_text=self._t("Thanks for using IOGraph. If you'd like to support the project, I'd really appreciate it."),
+            title=self._t("donate.first_graphic_saved.title"),
+            text=self._t("donate.first_graphic_saved.text"),
+            informative_text=self._t("donate.first_graphic_saved.info"),
             source="first_image_saved_popup",
         )
 
     def _maybe_prompt_support_after_first_raw_save(self) -> None:
         self._maybe_prompt_support(
             key=self._PROMPT_FIRST_RAW_SAVE_KEY,
-            title=self._t("RAW Data Saved"),
-            text=self._t("Your RAW data is saved."),
-            informative_text=self._t("If IOGraph is helpful to you, you can support its continued development."),
+            title=self._t("donate.raw_saved.title"),
+            text=self._t("donate.raw_saved.text"),
+            informative_text=self._t("donate.raw_saved.info"),
             source="first_raw_saved_popup",
         )
 
@@ -542,7 +542,7 @@ class MainWindow(QMainWindow):
         if checked:
             self._refresh_desktop_snapshot()
         else:
-            self._status(self._t("Desktop background disabled"))
+            self._status(self._t("desktop.background_disabled"))
 
     def _request_preview_rerender(self) -> None:
         if self._preview_render_thread is not None:
@@ -1099,7 +1099,7 @@ class MainWindow(QMainWindow):
     def _show_about_dialog(self) -> None:
         QMessageBox.information(
             self,
-            self._t("About IOGraph"),
+            self._t("about.title"),
             f"IOGraph {self._app_version}\nTurn your routine work into contemporary art",
         )
 
@@ -1152,22 +1152,22 @@ class MainWindow(QMainWindow):
             if manual:
                 QMessageBox.information(
                     self,
-                    self._t("Check for Updates"),
-                    self._t("Update download is in progress.\nPlease wait until it finishes."),
+                    self._t("update.check.idle"),
+                    self._t("update.download.running_wait"),
                 )
             return
         if self._update_controller.is_checking():
             if manual:
                 QMessageBox.information(
                     self,
-                    self._t("Check for Updates"),
-                    self._t("Update check is already running.\nPlease wait a few seconds and try again."),
+                    self._t("update.check.idle"),
+                    self._t("update.check.running_wait"),
                 )
             return
         if not self._update_controller.start_check(self._app_version, manual):
             return
         self._set_update_check_busy(True)
-        self._status(self._t("Checking for updates..."))
+        self._status(self._t("update.check.in_progress_lower"))
         return
 
     def _on_update_check_finished(self, manual: bool, result: dict) -> None:
@@ -1177,7 +1177,7 @@ class MainWindow(QMainWindow):
             if manual:
                 QMessageBox.warning(
                     self,
-                    self._t("Check for Updates"),
+                    self._t("update.check.idle"),
                     f"{self._t('Unable to check for updates:')}\n{result.get('error', '')}",
                 )
             return
@@ -1189,8 +1189,8 @@ class MainWindow(QMainWindow):
         asset_name = str(result.get("asset_name", ""))
         if not has_update:
             if manual:
-                QMessageBox.information(self, self._t("Check for Updates"), f"{self._t('You are up to date')} ({self._app_version}).")
-            self._status(self._t("No updates found"))
+                QMessageBox.information(self, self._t("update.check.idle"), f"{self._t('update.check.up_to_date')} ({self._app_version}).")
+            self._status(self._t("update.none_found"))
             return
         if not manual:
             last_downloaded = self._settings.value(SettingsKeys.UPDATE_LAST_AUTO_DOWNLOADED_VERSION, "", str)
@@ -1205,7 +1205,7 @@ class MainWindow(QMainWindow):
                 message = UpdateUiDecisions.already_downloaded_prompt(downloaded_path)
                 answer = QMessageBox.question(
                     self,
-                    self._t("Update Ready"),
+                    self._t("update.ready.title"),
                     message,
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.Yes,
@@ -1219,7 +1219,7 @@ class MainWindow(QMainWindow):
             buttons = QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
             answer = QMessageBox.question(
                 self,
-                self._t("Update Available"),
+                self._t("update.available.title"),
                 f"IOGraph {latest_version} {self._t('is available.')}\n\n{self._t('Download now?')}",
                 buttons,
                 QMessageBox.StandardButton.Yes,
@@ -1231,7 +1231,7 @@ class MainWindow(QMainWindow):
                 self._open_url(release_url)
             return
         self._start_update_download(latest_version, asset_url, asset_name, manual)
-        self._status(self._t("Update available"))
+        self._status(self._t("update.available.status"))
 
     def _start_update_download(self, latest_version: str, asset_url: str, asset_name: str, manual: bool) -> None:
         if self._update_controller.is_downloading():
@@ -1242,7 +1242,7 @@ class MainWindow(QMainWindow):
         if not self._update_controller.start_download(latest_version, asset_url, str(target), manual):
             return
         self._set_update_check_busy(True)
-        self._status(self._t("Downloading update..."))
+        self._status(self._t("update.download.in_progress_lower"))
         return
 
     def _update_target_path(self, asset_name: str, latest_version: str, manual: bool) -> Path:
@@ -1271,11 +1271,11 @@ class MainWindow(QMainWindow):
             if manual:
                 QMessageBox.warning(
                     self,
-                    self._t("Update Download"),
+                    self._t("update.download.title"),
                     f"{self._t('Failed to download IOGraph')} {latest_version}:\n{error}",
                 )
             else:
-                self._status(self._t("Background update download failed"))
+                self._status(self._t("update.download.failed_background"))
             return
         local = Path(path)
         self._update_storage.register_download_result(local, latest_version, manual)
@@ -1283,7 +1283,7 @@ class MainWindow(QMainWindow):
         prompt_message = UpdateUiDecisions.install_ready_prompt(local)
         prompt = QMessageBox.question(
             self,
-            self._t("Update Ready"),
+            self._t("update.ready.title"),
             prompt_message,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.Yes,
@@ -1291,11 +1291,11 @@ class MainWindow(QMainWindow):
         if prompt == QMessageBox.StandardButton.Yes:
             self._update_storage.reset_install_ignore_count()
             self._open_update_artifact(local)
-            self._status(self._t("Update downloaded"))
+            self._status(self._t("update.download.done"))
             return
         self._update_storage.increment_install_ignore_count()
         self._update_tray_state()
-        self._status(self._t("Update downloaded"))
+        self._status(self._t("update.download.done"))
 
     def _set_update_check_busy(self, busy: bool) -> None:
         label = check_updates_label(
@@ -1343,8 +1343,8 @@ class MainWindow(QMainWindow):
         if not path:
             QMessageBox.information(
                 self,
-                self._t("Install Downloaded Update"),
-                self._t("No downloaded update was found."),
+                self._t("update.install.title"),
+                self._t("update.install.none_found"),
             )
             return
         local = Path(path)
@@ -1353,8 +1353,8 @@ class MainWindow(QMainWindow):
             self._update_install_update_actions()
             QMessageBox.information(
                 self,
-                self._t("Install Downloaded Update"),
-                self._t("Downloaded update file no longer exists."),
+                self._t("update.install.title"),
+                self._t("update.install.file_missing"),
             )
             return
         self._update_storage.reset_install_ignore_count()
@@ -1378,15 +1378,15 @@ class MainWindow(QMainWindow):
         if self._mac_install_thread is not None:
             QMessageBox.information(
                 self,
-                self._t("Install Downloaded Update"),
-                self._t("Update installation is already in progress."),
+                self._t("update.install.title"),
+                self._t("update.install.in_progress"),
             )
             return
         if not getattr(sys, "frozen", False):
             QMessageBox.warning(
                 self,
-                self._t("Install Downloaded Update"),
-                self._t("Automatic install is available only in bundled app."),
+                self._t("update.install.title"),
+                self._t("update.install.auto_only_bundled"),
             )
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(zip_path)))
             return
@@ -1394,8 +1394,8 @@ class MainWindow(QMainWindow):
         current_app = self._current_macos_app_bundle_path()
         if current_app is not None:
             current_team = MacZipInstallWorker._codesign_team_identifier(current_app)
-        progress = QProgressDialog(self._t("Preparing update installation..."), "", 0, 0, self)
-        progress.setWindowTitle(self._t("Installing Update"))
+        progress = QProgressDialog(self._t("update.install.preparing"), "", 0, 0, self)
+        progress.setWindowTitle(self._t("update.install.installing_title"))
         progress.setCancelButton(None)
         progress.setWindowModality(Qt.WindowModality.ApplicationModal)
         progress.setMinimumDuration(0)
@@ -1430,9 +1430,9 @@ class MainWindow(QMainWindow):
             return
         QMessageBox.warning(
             self,
-            self._t("Install Downloaded Update"),
+            self._t("update.install.title"),
             (
-                self._t("Automatic install failed. Opening downloaded package for manual installation.")
+                self._t("update.install.auto_failed_open_manual")
                 if not error
                 else f"{self._t('Automatic install failed:')} {error}\n\n{self._t('Opening downloaded package for manual installation.')}"
             ),
@@ -1480,8 +1480,8 @@ class MainWindow(QMainWindow):
         if current != prev:
             QMessageBox.information(
                 self,
-                self._t("Language"),
-                self._t("Language preference saved. Some labels may require app restart to fully apply."),
+                self._t("language.title"),
+                self._t("language.saved_restart_notice"),
             )
 
     def _sync_language_actions(self) -> None:
