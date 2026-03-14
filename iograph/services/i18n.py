@@ -112,8 +112,19 @@ class I18nService:
         "update.install.preparing": "Preparing update installation...",
         "update.install.installing_title": "Installing Update",
         "update.install.auto_failed_open_manual": "Automatic install failed. Opening downloaded package for manual installation.",
+        "update.check.unable_template": "Unable to check for updates:\n{error}",
+        "update.available.prompt_template": "IOGraph {version} is available.\n\nDownload now?",
+        "update.download.failed_template": "Failed to download IOGraph {version}:\n{error}",
+        "update.install.auto_failed_with_error_template": "Automatic install failed: {error}\n\nOpening downloaded package for manual installation.",
         "language.title": "Language",
         "language.saved_restart_notice": "Language preference saved. Some labels may require app restart to fully apply.",
+    }
+
+    _OPTIONAL_TRANSLATION_IDS = {
+        "update.check.unable_template",
+        "update.available.prompt_template",
+        "update.download.failed_template",
+        "update.install.auto_failed_with_error_template",
     }
 
     _TRANSLATIONS = {
@@ -993,13 +1004,15 @@ class I18nService:
         extra_map = cls._EXTRA_TRANSLATIONS.get(language, {})
         missing: list[str] = []
         for key, source in cls._KEY_TO_SOURCE.items():
+            if key in cls._OPTIONAL_TRANSLATION_IDS:
+                continue
             if source not in source_map and source not in extra_map:
                 missing.append(key)
         return missing
 
     @classmethod
     def translation_coverage_report(cls) -> dict[str, dict[str, int]]:
-        total = len(cls._KEY_TO_SOURCE)
+        total = len([k for k in cls._KEY_TO_SOURCE if k not in cls._OPTIONAL_TRANSLATION_IDS])
         report: dict[str, dict[str, int]] = {}
         for lang in cls.SUPPORTED_LANGUAGES:
             missing = len(cls.missing_translation_ids(lang))

@@ -1178,7 +1178,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(
                     self,
                     self._t("update.check.idle"),
-                    f"{self._t('Unable to check for updates:')}\n{result.get('error', '')}",
+                    self._t("update.check.unable_template").format(error=result.get("error", "")),
                 )
             return
         has_update = bool(result.get("has_update", False))
@@ -1220,7 +1220,7 @@ class MainWindow(QMainWindow):
             answer = QMessageBox.question(
                 self,
                 self._t("update.available.title"),
-                f"IOGraph {latest_version} {self._t('is available.')}\n\n{self._t('Download now?')}",
+                self._t("update.available.prompt_template").format(version=latest_version),
                 buttons,
                 QMessageBox.StandardButton.Yes,
             )
@@ -1272,7 +1272,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(
                     self,
                     self._t("update.download.title"),
-                    f"{self._t('Failed to download IOGraph')} {latest_version}:\n{error}",
+                    self._t("update.download.failed_template").format(version=latest_version, error=error),
                 )
             else:
                 self._status(self._t("update.download.failed_background"))
@@ -1434,7 +1434,7 @@ class MainWindow(QMainWindow):
             (
                 self._t("update.install.auto_failed_open_manual")
                 if not error
-                else f"{self._t('Automatic install failed:')} {error}\n\n{self._t('Opening downloaded package for manual installation.')}"
+                else self._t("update.install.auto_failed_with_error_template").format(error=error)
             ),
         )
         if zip_path is not None:
