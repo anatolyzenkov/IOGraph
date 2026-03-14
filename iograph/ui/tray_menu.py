@@ -45,36 +45,36 @@ def build_tray_menu(
     on_quit,
 ) -> TrayMenuRefs:
     tray_menu = QMenu(parent)
-    tray_install_update_action = tray_menu.addAction(tr("Update now"))
+    tray_install_update_action = tray_menu.addAction(tr("menu.update_now"))
     tray_install_update_action.triggered.connect(on_open_downloaded_update)
     tray_update_sep_action = tray_menu.addSeparator()
 
-    tray_toggle_action = tray_menu.addAction(tr("Start"))
+    tray_toggle_action = tray_menu.addAction(tr("menu.start"))
     tray_toggle_action.triggered.connect(on_toggle_tracking)
-    tray_reset_action = tray_menu.addAction(tr("Reset"))
+    tray_reset_action = tray_menu.addAction(tr("menu.reset"))
     tray_reset_action.triggered.connect(on_reset)
     tray_reset_action.setEnabled(False)
 
     tray_menu.addSeparator()
-    tray_save_image_action = tray_menu.addAction(tr("Save Image..."))
+    tray_save_image_action = tray_menu.addAction(tr("menu.save_image"))
     tray_save_image_action.triggered.connect(on_save_image)
     tray_save_image_action.setEnabled(False)
-    tray_save_csv_action = tray_menu.addAction(tr("Save Raw Data..."))
+    tray_save_csv_action = tray_menu.addAction(tr("menu.save_raw_data"))
     tray_save_csv_action.triggered.connect(on_save_csv)
     tray_save_csv_action.setEnabled(False)
 
     tray_menu.addSeparator()
-    tray_settings_action = tray_menu.addAction(tr("Show Settings"))
+    tray_settings_action = tray_menu.addAction(tr("tray.show_settings"))
     tray_settings_action.triggered.connect(on_toggle_settings)
 
-    more_menu = tray_menu.addMenu(tr("More"))
-    tray_check_updates_action = more_menu.addAction(tr("Check for Updates"))
+    more_menu = tray_menu.addMenu(tr("tray.more"))
+    tray_check_updates_action = more_menu.addAction(tr("menu.check_updates"))
     tray_check_updates_action.triggered.connect(on_check_updates)
-    tray_auto_update_action = more_menu.addAction(tr("Check for Updates Automatically"))
+    tray_auto_update_action = more_menu.addAction(tr("menu.auto_updates"))
     tray_auto_update_action.setCheckable(True)
     tray_auto_update_action.toggled.connect(on_auto_update_toggled)
 
-    language_menu = more_menu.addMenu(tr("Language"))
+    language_menu = more_menu.addMenu(tr("menu.language"))
     language_group = QActionGroup(parent)
     language_group.setExclusive(True)
     language_actions: dict[str, QAction] = {}
@@ -88,14 +88,14 @@ def build_tray_menu(
         language_actions[code] = action
 
     more_menu.addSeparator()
-    links_menu = more_menu.addMenu(tr("Resources"))
-    links_menu.addAction(tr("About IOGraphica"), on_open_about_iographica)
-    links_menu.addAction(tr("IOGraph Website"), on_open_website)
-    links_menu.addAction(tr("Get Source Code"), on_open_source)
-    links_menu.addAction(tr("Support IOGraphica"), on_open_support)
+    links_menu = more_menu.addMenu(tr("menu.resources"))
+    links_menu.addAction(tr("menu.about_iographica"), on_open_about_iographica)
+    links_menu.addAction(tr("menu.iograph_website"), on_open_website)
+    links_menu.addAction(tr("menu.get_source"), on_open_source)
+    links_menu.addAction(tr("menu.support_iographica"), on_open_support)
 
     more_menu.addSeparator()
-    more_menu.addAction(tr("About IOGraph"), on_about)
+    more_menu.addAction(tr("menu.about_iograph"), on_about)
     tray_menu.addSeparator()
     tray_menu.addAction(tray_exit_label, on_quit)
 

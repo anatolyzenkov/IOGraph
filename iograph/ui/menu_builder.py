@@ -49,70 +49,70 @@ def build_main_menu(
     on_open_source,
     on_open_support,
 ) -> MenuActionRefs:
-    file_menu = parent.menuBar().addMenu(f"&{tr('File')}")
-    tracking_menu = parent.menuBar().addMenu(f"&{tr('Tracking')}")
-    options_menu = parent.menuBar().addMenu(f"&{tr('Options')}")
-    help_menu = parent.menuBar().addMenu(f"&{tr('Help')}")
+    file_menu = parent.menuBar().addMenu(f"&{tr('menu.file')}")
+    tracking_menu = parent.menuBar().addMenu(f"&{tr('menu.tracking')}")
+    options_menu = parent.menuBar().addMenu(f"&{tr('menu.options')}")
+    help_menu = parent.menuBar().addMenu(f"&{tr('menu.help')}")
 
-    save_image_action = QAction(tr("Save Image..."), parent)
+    save_image_action = QAction(tr("menu.save_image"), parent)
     save_image_action.setShortcut("Ctrl+S")
     save_image_action.triggered.connect(on_save_image)
     file_menu.addAction(save_image_action)
 
-    save_csv_action = QAction(tr("Save Raw Data..."), parent)
+    save_csv_action = QAction(tr("menu.save_raw_data"), parent)
     save_csv_action.setShortcut("Ctrl+Shift+S")
     save_csv_action.triggered.connect(on_save_csv)
     file_menu.addAction(save_csv_action)
 
-    reset_action = QAction(tr("Reset"), parent)
+    reset_action = QAction(tr("menu.reset"), parent)
     reset_action.setShortcut("Ctrl+R")
     reset_action.triggered.connect(on_reset)
     file_menu.addAction(reset_action)
 
     file_menu.addSeparator()
-    exit_action = QAction(tr("Exit"), parent)
+    exit_action = QAction(tr("menu.exit"), parent)
     exit_action.setShortcut("Ctrl+Q")
     exit_action.triggered.connect(on_quit)
     file_menu.addAction(exit_action)
 
-    tracking_toggle_action = QAction(tr("Start"), parent)
+    tracking_toggle_action = QAction(tr("menu.start"), parent)
     tracking_toggle_action.setShortcut("Ctrl+R")
     tracking_toggle_action.triggered.connect(on_toggle_tracking)
     tracking_menu.addAction(tracking_toggle_action)
 
-    tracking_reset_action = QAction(tr("Reset"), parent)
+    tracking_reset_action = QAction(tr("menu.reset"), parent)
     tracking_reset_action.setShortcut("Ctrl+N")
     tracking_reset_action.triggered.connect(on_reset)
     tracking_menu.addAction(tracking_reset_action)
 
-    ignore_stops_action = QAction(tr("Ignore Mouse Stops"), parent)
+    ignore_stops_action = QAction(tr("menu.ignore_mouse_stops"), parent)
     ignore_stops_action.setCheckable(True)
     ignore_stops_action.toggled.connect(on_ignore_stops_toggled)
     options_menu.addAction(ignore_stops_action)
 
-    colorful_action = QAction(tr("Colorful Scheme"), parent)
+    colorful_action = QAction(tr("menu.colorful_scheme"), parent)
     colorful_action.setCheckable(True)
     colorful_action.toggled.connect(on_colorful_toggled)
     options_menu.addAction(colorful_action)
 
-    use_desktop_action = QAction(tr("Use Desktop Background"), parent)
+    use_desktop_action = QAction(tr("menu.use_desktop_background"), parent)
     use_desktop_action.setCheckable(True)
     use_desktop_action.toggled.connect(on_use_desktop_toggled)
     options_menu.addAction(use_desktop_action)
 
-    multi_monitor_action = QAction(tr("Use Multiple Monitors"), parent)
+    multi_monitor_action = QAction(tr("menu.use_multiple_monitors"), parent)
     multi_monitor_action.setCheckable(True)
     multi_monitor_action.setChecked(True)
     multi_monitor_action.toggled.connect(on_multi_monitor_toggled)
     options_menu.addAction(multi_monitor_action)
 
-    refresh_desktop_action = QAction(tr("Update Desktop Snapshot"), parent)
+    refresh_desktop_action = QAction(tr("menu.update_desktop_snapshot"), parent)
     refresh_desktop_action.triggered.connect(on_refresh_desktop_snapshot)
     refresh_desktop_action.setEnabled(False)
     options_menu.addAction(refresh_desktop_action)
 
     options_menu.addSeparator()
-    language_menu = options_menu.addMenu(tr("Language"))
+    language_menu = options_menu.addMenu(tr("menu.language"))
     language_group = QActionGroup(parent)
     language_group.setExclusive(True)
     language_actions: dict[str, QAction] = {}
@@ -125,30 +125,30 @@ def build_main_menu(
         language_menu.addAction(action)
         language_actions[code] = action
 
-    about_action = QAction(tr("About IOGraph"), parent)
+    about_action = QAction(tr("menu.about_iograph"), parent)
     about_action.triggered.connect(on_about)
     help_menu.addAction(about_action)
     help_menu.addSeparator()
 
-    check_updates_action = QAction(tr("Check for Updates"), parent)
+    check_updates_action = QAction(tr("menu.check_updates"), parent)
     check_updates_action.triggered.connect(on_check_updates)
     help_menu.addAction(check_updates_action)
 
-    auto_update_action = QAction(tr("Check for Updates Automatically"), parent)
+    auto_update_action = QAction(tr("menu.auto_updates"), parent)
     auto_update_action.setCheckable(True)
     auto_update_action.toggled.connect(on_auto_update_toggled)
     help_menu.addAction(auto_update_action)
 
-    install_downloaded_action = QAction(tr("Update now"), parent)
+    install_downloaded_action = QAction(tr("menu.update_now"), parent)
     install_downloaded_action.triggered.connect(on_open_downloaded_update)
     help_menu.addAction(install_downloaded_action)
 
     help_menu.addSeparator()
-    resources_menu = help_menu.addMenu(tr("Resources"))
-    resources_menu.addAction(tr("About IOGraphica"), on_open_about_iographica)
-    resources_menu.addAction(tr("IOGraph Website"), on_open_website)
-    resources_menu.addAction(tr("Get Source Code"), on_open_source)
-    resources_menu.addAction(tr("Support IOGraphica"), on_open_support)
+    resources_menu = help_menu.addMenu(tr("menu.resources"))
+    resources_menu.addAction(tr("menu.about_iographica"), on_open_about_iographica)
+    resources_menu.addAction(tr("menu.iograph_website"), on_open_website)
+    resources_menu.addAction(tr("menu.get_source"), on_open_source)
+    resources_menu.addAction(tr("menu.support_iographica"), on_open_support)
 
     return MenuActionRefs(
         save_image_action=save_image_action,

@@ -19,4 +19,4 @@ def show_window_on_top(window) -> None:
 
 
 def tray_settings_label(is_settings_open: bool, *, tr=lambda s: s) -> str:
-    return tr("Hide Settings") if is_settings_open else tr("Show Settings")
+    return tr("tray.hide_settings") if is_settings_open else tr("tray.show_settings")

@@ -3,10 +3,10 @@ from __future__ import annotations
 
 def check_updates_label(*, is_downloading: bool, is_checking: bool, tr=lambda s: s) -> str:
     if is_downloading:
-        return tr("Downloading Update...")
+        return tr("update.download.in_progress")
     if is_checking:
-        return tr("Checking for Updates...")
-    return tr("Check for Updates")
+        return tr("update.check.in_progress")
+    return tr("update.check.idle")
 
 
 def apply_check_updates_status(*, label: str, menu_action, tray_action) -> None:

@@ -38,6 +38,41 @@ class I18nService:
         "zh-Hant": "繁體中文",
     }
 
+    _KEY_TO_SOURCE = {
+        "menu.file": "File",
+        "menu.tracking": "Tracking",
+        "menu.options": "Options",
+        "menu.help": "Help",
+        "menu.save_image": "Save Image...",
+        "menu.save_raw_data": "Save Raw Data...",
+        "menu.reset": "Reset",
+        "menu.exit": "Exit",
+        "menu.start": "Start",
+        "menu.ignore_mouse_stops": "Ignore Mouse Stops",
+        "menu.colorful_scheme": "Colorful Scheme",
+        "menu.use_desktop_background": "Use Desktop Background",
+        "menu.use_multiple_monitors": "Use Multiple Monitors",
+        "menu.update_desktop_snapshot": "Update Desktop Snapshot",
+        "menu.language": "Language",
+        "menu.about_iograph": "About IOGraph",
+        "menu.check_updates": "Check for Updates",
+        "menu.auto_updates": "Check for Updates Automatically",
+        "menu.update_now": "Update now",
+        "menu.resources": "Resources",
+        "menu.about_iographica": "About IOGraphica",
+        "menu.iograph_website": "IOGraph Website",
+        "menu.get_source": "Get Source Code",
+        "menu.support_iographica": "Support IOGraphica",
+        "tray.more": "More",
+        "tray.show_settings": "Show Settings",
+        "tray.hide_settings": "Hide Settings",
+        "tray.quit": "Quit",
+        "lang.auto_system": "Auto (System)",
+        "update.check.idle": "Check for Updates",
+        "update.check.in_progress": "Checking for Updates...",
+        "update.download.in_progress": "Downloading Update...",
+    }
+
     _TRANSLATIONS = {
         "de": {
             "Language": "Sprache",
@@ -688,7 +723,7 @@ class I18nService:
         return self._resolve_system_language()
 
     def language_menu_options(self) -> list[tuple[str, str]]:
-        options = [(self.AUTO_MODE, self.tr("Auto (System)"))]
+        options = [(self.AUTO_MODE, self.tr("lang.auto_system"))]
         for code in self.SUPPORTED_LANGUAGES:
             options.append((code, self.LANGUAGE_LABELS.get(code, code)))
         return options
@@ -712,5 +747,6 @@ class I18nService:
         return cls.DEFAULT_LANGUAGE
 
     def tr(self, source_text: str) -> str:
+        source = self._KEY_TO_SOURCE.get(source_text, source_text)
         lang = self.effective_language()
-        return self._TRANSLATIONS.get(lang, {}).get(source_text, source_text)
+        return self._TRANSLATIONS.get(lang, {}).get(source, source)
