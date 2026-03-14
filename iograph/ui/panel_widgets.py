@@ -24,6 +24,7 @@ class SecondaryPanelRefs:
 def build_front_panel(
     parent: QWidget,
     *,
+    tr,
     on_reset,
     icon_loader,
     is_windows: bool,
@@ -37,7 +38,7 @@ def build_front_panel(
     top_row.setSpacing(5)
     front_layout.addLayout(top_row)
 
-    total_time_label = QLabel("Total Time", parent)
+    total_time_label = QLabel(tr("session.total_time"), parent)
     total_time_font_size = 24 if is_windows else 30
     total_time_label.setFont(QFont(total_time_label.font().family(), total_time_font_size))
     total_time_label.setFixedHeight(36)
@@ -60,7 +61,7 @@ def build_front_panel(
     top_row.setAlignment(reset_btn, Qt.AlignmentFlag.AlignVCenter)
     top_row.addStretch(1)
 
-    period_label = QLabel("Time Period", parent)
+    period_label = QLabel(tr("session.time_period"), parent)
     period_font_size = 10 if is_windows else 12
     period_label.setFont(QFont(period_label.font().family(), period_font_size))
     period_label.setFixedHeight(16)

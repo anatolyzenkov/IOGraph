@@ -212,6 +212,7 @@ class MainWindow(QMainWindow):
 
         front_refs = build_front_panel(
             self._front_panel,
+            tr=self._t,
             on_reset=self._reset_canvas,
             icon_loader=self._icon,
             is_windows=sys.platform.startswith("win"),
@@ -222,6 +223,7 @@ class MainWindow(QMainWindow):
 
         panel_refs = build_settings_panel(
             self._control_panel,
+            tr=self._t,
             on_refresh_desktop_snapshot=self._refresh_desktop_snapshot,
             on_update_desktop_pressed=self._on_update_desktop_pressed,
             on_update_desktop_released=self._on_update_desktop_released,
