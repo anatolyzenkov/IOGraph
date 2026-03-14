@@ -6,6 +6,9 @@ from pathlib import Path
 from PyQt6.QtCore import QLockFile, QStandardPaths, Qt
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
+from ..services.i18n import I18nService
+from ..services.settings import AppSettings
+
 _windows_single_instance_lock: QLockFile | None = None
 
 
@@ -31,7 +34,12 @@ def _acquire_windows_single_instance_lock() -> bool:
     lock = QLockFile(str(lock_dir / "iograph-single-instance.lock"))
     lock.setStaleLockTime(0)
     if not lock.tryLock(0):
-        QMessageBox.information(None, "IOGraph", "IOGraph is already running.")
+        i18n = I18nService(AppSettings())
+        QMessageBox.information(
+            None,
+            i18n.tr("app.single_instance.title"),
+            i18n.tr("app.single_instance.message"),
+        )
         return False
     _windows_single_instance_lock = lock
     return True

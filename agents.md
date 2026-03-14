@@ -157,4 +157,159 @@ Ship IOGraph Python + PyQt as production app with stable update flow.
 - Step 5: Stabilization
   - [x] Add lightweight regression checks for update + startup in CI.
   - [x] Validate behavior parity before merging back to `python-port` (manual pass done; full `Install Downloaded Update` path to be rechecked on next RC with a fresh release).
+
+## I18n wave (feature/i18n-foundation)
+- Status:
+  - branch: `feature/i18n-foundation`
+  - id-key migration is active and already applied to menu/tray/update/main flows.
+  - supported languages now include:
+    - `en`, `de`, `fr`, `es`, `pt`, `it`, `ru`, `uk`, `tr`, `ar`, `zh-Hans`, `zh-Hant`.
+  - language mode:
+    - `auto` (system locale with fallback to `en`)
+    - explicit language selection via menu/tray.
+- Implemented:
+  - `I18nService` with id->source mapping and translation lookup.
+  - language selection UI in main and tray menus.
+  - coverage checker scripts:
+    - `scripts/smoke_regression.py`
+    - `scripts/i18n_missing.py`
+  - current i18n coverage target keys are at 100% according to `i18n_missing.py` report.
+- Current task:
+  - audit all remaining hardcoded user-facing strings in `iograph/**` and remove/replace with i18n ids where appropriate.
+
+## I18n hardcoded audit (2026-03-14)
+- Confirmed user-facing hardcoded strings still present in:
+  - `iograph/core/session_controller.py`
+    - timer/period phrases and date/ordinal fragments (`Just started`, `From ... to ...`, `second/minute/hour/day`, `1st/2nd/3rd/...`).
+  - `iograph/core/tracking_ui_decisions.py`
+    - toggle labels (`Pause`, `Start`, `Resume`).
+  - `iograph/core/tracking_controller.py`
+    - tracking status/reset confirmation text (`Tracking started/stopped`, reset confirmation prompt).
+  - `iograph/core/export_controller.py`
+    - export/preview status strings.
+  - `iograph/core/update_ui_decisions.py`
+    - update-ready prompts and install action labels.
+  - `iograph/ui/desktop_snapshot_controller.py`
+    - desktop snapshot success/failure status texts.
+  - `iograph/ui/support_prompt.py`
+    - support prompt button labels (`Maybe later`, `Support the project`).
+  - `iograph/app/bootstrap.py`
+    - single-instance message (`IOGraph is already running.`).
+  - `iograph/main.py`
+    - app window title and about tagline text are still literal.
+- Next migration target:
+  - route all above strings through `I18nService` id keys, keep core modules UI-agnostic by passing translator callables from `MainWindow`.
+
+## I18n runtime updates (2026-03-14, latest)
+- Removed language-change restart notice popup; language now applies live for menu/tray/panel/settings labels.
+- Dynamic toggle labels now translated via i18n keys:
+  - `menu.start`
+  - `menu.pause`
+  - `menu.resume`
+- Session dynamic time/period labels are normalized to language-neutral numeric format:
+  - elapsed: `HH:MM:SS` (or `D HH:MM:SS` for multi-day sessions)
+  - period: `HH:MM` or `HH:MM DD.MM -> HH:MM DD.MM`
+- This avoids English-only wording in timer/period labels while full deep i18n migration of `core/*` continues.
+
+## I18n dynamic labels (2026-03-14, latest)
+- Reworked session dynamic labels back to human-readable style with i18n templates:
+  - time: `Just started`, `{value} second/minute/hour/day` (localized via keys)
+  - period: `From {start}` / `From {start} to {end}` (localized via keys)
+- Reset confirmation popup is now fully i18n-driven:
+  - base prompt + long-session suffix template use translation keys.
+- Support prompt buttons are now i18n-driven:
+  - `Maybe later`
+  - `Support the project`
+
+## Pluralization engine (2026-03-14, latest)
+- Added plural-category routing in `I18nService` (`one/few/many/other` where applicable).
+- Implemented Slavic plural rules for:
+  - Russian (`ru`)
+  - Ukrainian (`uk`)
+- Wired session timer text to use `i18n.plural(...)`:
+  - now correctly handles forms like `21 секунда`, `22 секунды`, `25 секунд`.
+
+## Update dialogs i18n (2026-03-14, latest)
+- Localized update/install prompt decisions by routing `UpdateUiDecisions` through translator callable:
+  - already downloaded prompt (open package / close+install)
+  - ready-to-install prompt
+  - install action labels (`Install Downloaded Update...`, `Open Update Package`, `Update now`)
+- Wired translation into:
+  - `MainWindow` update check and download prompt flow
+  - install action sync helper (`ui/update_actions.py`)
+- About dialog tagline moved to i18n key (`about.tagline`).
+
+## Additional i18n cleanup (2026-03-14, latest)
+- Localized export status strings via i18n keys in `core/export_controller.py`:
+  - exporting / saved / failed / preview rendering / preview ready.
+- Localized desktop snapshot status strings in `ui/desktop_snapshot_controller.py`:
+  - snapshot updated / snapshot failed.
+- Wired both flows from `main.py` through translator callback (`tr=self._t`).
+
+## Bootstrap i18n (2026-03-14, latest)
+- Localized Windows single-instance popup in `app/bootstrap.py` using `I18nService` + `AppSettings`:
+  - title: `app.single_instance.title`
+  - message: `app.single_instance.message`
+- Added translations for `app.single_instance.message` in `ru` and `uk`.
+
+## New language packs (2026-03-14, latest)
+- Added new language options:
+  - `ja` (Japanese)
+  - `kk` (Kazakh)
+  - `sr` (Serbian)
+- Extended `SUPPORTED_LANGUAGES` and `LANGUAGE_LABELS` in `iograph/services/i18n.py`.
+- Added base menu/update translation entries in `_TRANSLATIONS` for all three new languages.
+- Added runtime/session/dialog coverage entries in `_EXTRA_TRANSLATIONS` for all three new languages.
+- Added Serbian plural handling:
+  - new `sr` templates in `_PLURAL_TEMPLATES`
+  - plural category routing (`one/few/other`) in `_plural_category`.
+
+## Language menu UX (2026-03-14, latest)
+- Language options are now sorted by displayed language label.
+- `Auto (System)` is pinned at top and visually separated by a divider from explicit language choices.
+- Applied in both:
+  - main menu language submenu
+  - tray menu language submenu
+
+## Locale variants and date/time formatting (2026-03-14, latest)
+- Added explicit locale variants:
+  - `es-419`, `es-ES`
+  - `pt-BR`, `pt-PT`
+- Backward-compatible migration for legacy stored values:
+  - `es` -> `es-419`
+  - `pt` -> `pt-BR`
+- Auto language resolution now chooses Spanish/Portuguese variant by system locale region.
+- Added translation fallback chains:
+  - `es-ES -> es-419`
+  - `pt-PT -> pt-BR`
+- Added `I18nService` locale helpers:
+  - `effective_qlocale()`
+  - `format_time(...)`
+  - `format_short_date(...)`
+- Session period label now uses locale-aware date/time formatting (via callbacks from `MainWindow`), while keeping localized `From ... to ...` templates.
+
+## Git workflow (single-maintainer, latest)
+- Feature branches can be kept local by default.
+- Primary integration path:
+  1. develop locally in `feature/*`
+  2. merge locally into `python-port`
+  3. continue work from local `python-port`
+- Push to GitHub only on explicit request:
+  - when publishing RC/release
+  - or when checkpoint backup is explicitly requested
+- Keep remote noise low:
+  - delete remote feature branches after local merge unless explicitly needed.
+
+## Locale variants polishing (2026-03-14, latest)
+- Migrated translation dictionary keys from legacy:
+  - `es` -> `es-419`
+  - `pt` -> `pt-BR`
+- Added first explicit variant overrides:
+  - `pt-PT` (lexical differences like *definições*, *guardar*)
+  - `es-ES` (minor lexical differences)
+- Export filename generation is now locale-aware and filesystem-safe:
+  - uses localized period/time labels
+  - sanitizes invalid filename characters (`<>:\"/\\|?*` and control chars)
+  - trims trailing dots/spaces and collapses whitespace
+- Removed legacy settings alias-compatibility for old language codes (`es`/`pt`) to keep i18n mode normalization minimal and explicit.
     

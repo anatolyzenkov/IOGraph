@@ -35,6 +35,7 @@ from .core.tracking_controller import TrackingController
 from .core.update_storage import UpdateStorageManager
 from .core.update_ui_decisions import UpdateUiDecisions
 from .core.update_workers import MacZipInstallWorker
+from .services.i18n import I18nService
 from .services.settings import AppSettings, SettingsKeys
 from .ui.icon_loader import build_app_icon
 from .ui.desktop_snapshot_controller import DesktopSnapshotController
@@ -93,7 +94,6 @@ class ExportRenderWorker(QObject):
 class MainWindow(QMainWindow):
     MAIN_FRAME_WIDTH = 720
     PANEL_HEIGHT = 66
-    _MONTH_NAMES = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
     _RESOURCE_DIR = Path(__file__).resolve().parent / "resources"
     _APP_ICON_FILES = ("icon16.png", "icon32.png", "icon64.png", "icon128.png", "icon256.png", "icon512.png")
     _ABOUT_IOGRAPHICA_URL = "https://anatolyzenkov.com/iographica?utm_source=iograph&utm_medium=desktop&utm_campaign=about_iographica"
@@ -115,6 +115,7 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self._settings = AppSettings()
+        self._i18n = I18nService(self._settings)
         self._signals = AppSignals()
         self._update_storage = UpdateStorageManager(self._settings, self._UPDATE_STAGING_TTL_SECONDS)
         self._update_controller = UpdateController(self)
@@ -125,7 +126,7 @@ class MainWindow(QMainWindow):
         )
         self._update_controller.download_finished.connect(self._on_update_download_finished)
         self._update_controller.state_changed.connect(lambda: self._set_update_check_busy(False))
-        session = SessionController(self._MONTH_NAMES, self)
+        session = SessionController(self)
         self._tracking_controller = TrackingController(session, self)
         self._tracking_controller.session_tracking_started.connect(lambda: self._signals.session_tracking_started.emit())
         self._tracking_controller.session_tracking_stopped.connect(lambda: self._signals.session_tracking_stopped.emit())
@@ -180,6 +181,7 @@ class MainWindow(QMainWindow):
             self,
             capture_desktop_background=self._canvas.update_desktop_background,
             on_status=self._status,
+            tr=self._t,
         )
         layout.addWidget(self._canvas, stretch=1)
 
@@ -210,6 +212,7 @@ class MainWindow(QMainWindow):
 
         front_refs = build_front_panel(
             self._front_panel,
+            tr=self._t,
             on_reset=self._reset_canvas,
             icon_loader=self._icon,
             is_windows=sys.platform.startswith("win"),
@@ -220,6 +223,7 @@ class MainWindow(QMainWindow):
 
         panel_refs = build_settings_panel(
             self._control_panel,
+            tr=self._t,
             on_refresh_desktop_snapshot=self._refresh_desktop_snapshot,
             on_update_desktop_pressed=self._on_update_desktop_pressed,
             on_update_desktop_released=self._on_update_desktop_released,
@@ -278,11 +282,15 @@ class MainWindow(QMainWindow):
         self._sync_ui_state()
         if self._auto_update_action.isChecked():
             QTimer.singleShot(1200, lambda: self._check_for_updates(manual=False))
-        self._status("Ready")
+        self._status(self._t("app.ready"))
 
     def _setup_actions(self) -> None:
         refs = build_main_menu(
             self,
+            tr=self._t,
+            language_options=self._i18n.language_menu_options(),
+            current_language_mode=self._i18n.current_mode(),
+            on_language_mode_selected=self._on_language_mode_selected,
             on_save_image=self._save_image,
             on_save_csv=self._save_csv,
             on_reset=self._reset_canvas,
@@ -305,6 +313,7 @@ class MainWindow(QMainWindow):
         self._save_image_action = refs.save_image_action
         self._save_csv_action = refs.save_csv_action
         self._reset_action = refs.reset_action
+        self._exit_action = refs.exit_action
         self._tracking_toggle_action = refs.tracking_toggle_action
         self._tracking_reset_action = refs.tracking_reset_action
         self._ignore_stops_action = refs.ignore_stops_action
@@ -315,6 +324,18 @@ class MainWindow(QMainWindow):
         self._check_updates_action = refs.check_updates_action
         self._auto_update_action = refs.auto_update_action
         self._install_downloaded_update_action = refs.install_downloaded_update_action
+        self._file_menu = refs.file_menu
+        self._tracking_menu = refs.tracking_menu
+        self._options_menu = refs.options_menu
+        self._help_menu = refs.help_menu
+        self._language_menu = refs.language_menu
+        self._resources_menu = refs.resources_menu
+        self._about_action = refs.about_action
+        self._about_iographica_action = refs.about_iographica_action
+        self._website_action = refs.website_action
+        self._source_action = refs.source_action
+        self._support_action = refs.support_action
+        self._language_actions = refs.language_actions
 
     def _setup_tray(self) -> None:
         if not QSystemTrayIcon.isSystemTrayAvailable():
@@ -322,9 +343,13 @@ class MainWindow(QMainWindow):
             return
         self._tray_icon = QSystemTrayIcon(self)
         self._tray_icon.setIcon(self._tray_state_icon(tracking=False))
-        tray_exit_label = "Exit" if sys.platform.startswith("win") else "Quit"
+        tray_exit_label = self._t("app.exit") if sys.platform.startswith("win") else self._t("app.quit")
         refs = build_tray_menu(
             self,
+            tr=self._t,
+            language_options=self._i18n.language_menu_options(),
+            current_language_mode=self._i18n.current_mode(),
+            on_language_mode_selected=self._on_language_mode_selected,
             tray_exit_label=tray_exit_label,
             on_open_downloaded_update=self._open_downloaded_update,
             on_toggle_tracking=lambda: self._set_tracking(not self._canvas.is_tracking()),
@@ -350,10 +375,21 @@ class MainWindow(QMainWindow):
         self._tray_settings_action = refs.settings_action
         self._tray_check_updates_action = refs.check_updates_action
         self._tray_auto_update_action = refs.auto_update_action
+        self._tray_more_menu = refs.more_menu
+        self._tray_language_menu = refs.language_menu
+        self._tray_links_menu = refs.links_menu
+        self._tray_about_action = refs.about_action
+        self._tray_quit_action = refs.quit_action
+        self._tray_about_iographica_action = refs.about_iographica_action
+        self._tray_website_action = refs.website_action
+        self._tray_source_action = refs.source_action
+        self._tray_support_action = refs.support_action
+        self._tray_language_actions = refs.language_actions
         self._tray_icon.setContextMenu(refs.menu)
         self._tray_icon.activated.connect(self._on_tray_activated)
         self._tray_icon.show()
         self._set_auto_update_state(self._auto_update_action.isChecked())
+        self._sync_language_actions()
         self._update_tray_state()
 
     def _bind_control_panel(self) -> None:
@@ -378,12 +414,16 @@ class MainWindow(QMainWindow):
         self._sync_ui_state()
 
     def _reset_canvas(self) -> None:
-        reset_request = self._tracking_controller.build_reset_request(self._canvas.get_elapsed_ms())
+        reset_request = self._tracking_controller.build_reset_request(
+            self._canvas.get_elapsed_ms(),
+            tr=self._t,
+            plural=self._i18n.plural,
+        )
         user_confirmed = True
         if reset_request.requires_confirmation:
             answer = QMessageBox.question(
                 self,
-                "Reset confirmation",
+                self._t("session.reset_confirmation"),
                 reset_request.message,
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
@@ -400,24 +440,24 @@ class MainWindow(QMainWindow):
         self._perform_reset_post_ui()
 
     def _perform_reset_post_ui(self) -> None:
-        self._total_time_label.setText("Total Time")
-        self._period_label.setText("Time Period")
+        self._total_time_label.setText(self._t("session.total_time"))
+        self._period_label.setText(self._t("session.time_period"))
         self._total_time_label.setVisible(False)
         self._period_label.setVisible(False)
         self._reset_btn.setVisible(False)
         self._sync_ui_state()
-        self._status("Canvas reset")
+        self._status(self._t("session.canvas_reset"))
 
     def _save_image(self) -> None:
         if self._export_thread is not None:
-            self._status("Export is already running")
+            self._status(self._t("export.already_running"))
             return
         default_dir = self._default_save_dir()
         path, _ = QFileDialog.getSaveFileName(
             self,
-            "Save image",
+            self._t("save.image.dialog_title"),
             str(default_dir / f"{self._build_export_base_name()}.png"),
-            "PNG image (*.png)",
+            self._t("save.image.filter_png"),
         )
         if not path:
             return
@@ -429,16 +469,16 @@ class MainWindow(QMainWindow):
         default_dir = self._default_save_dir()
         path, _ = QFileDialog.getSaveFileName(
             self,
-            "Save Raw Data",
+            self._t("save.raw.dialog_title"),
             str(default_dir / f"{self._build_export_base_name()}.csv"),
-            "CSV file (*.csv)",
+            self._t("save.raw.filter_csv"),
         )
         if not path:
             return
         csv_path = ExportController.ensure_csv_path(path)
         self._remember_save_dir(csv_path.parent)
         csv_path.write_text(self._canvas.export_csv_text(), encoding="utf-8")
-        self._status("CSV saved")
+        self._status(self._t("save.csv_saved"))
         self._maybe_prompt_support_after_first_raw_save()
         self._sync_ui_state()
 
@@ -454,7 +494,7 @@ class MainWindow(QMainWindow):
         )
         self._export_thread = thread
         self._export_worker = worker
-        self._status(ExportController.export_start_status())
+        self._status(ExportController.export_start_status(tr=self._t))
         export_ui = ExportController.ui_state(export_in_progress=True)
         self._save_btn.setEnabled(export_ui.can_save_image)
         self._save_image_action.setEnabled(export_ui.can_save_image)
@@ -464,7 +504,7 @@ class MainWindow(QMainWindow):
         thread.start()
 
     def _on_export_finished(self, ok: bool, _path: str) -> None:
-        self._status(ExportController.export_finished_status(ok))
+        self._status(ExportController.export_finished_status(ok, tr=self._t))
         if ExportController.should_prompt_support_after_image_save(ok):
             self._maybe_prompt_support_after_first_image_save()
         self._sync_ui_state()
@@ -472,18 +512,18 @@ class MainWindow(QMainWindow):
     def _maybe_prompt_support_after_first_image_save(self) -> None:
         self._maybe_prompt_support(
             key=self._PROMPT_FIRST_IMAGE_SAVE_KEY,
-            title="First Graphic Saved",
-            text="Done - your first IOGraph is saved.",
-            informative_text="Thanks for using IOGraph. If you'd like to support the project, I'd really appreciate it.",
+            title=self._t("donate.first_graphic_saved.title"),
+            text=self._t("donate.first_graphic_saved.text"),
+            informative_text=self._t("donate.first_graphic_saved.info"),
             source="first_image_saved_popup",
         )
 
     def _maybe_prompt_support_after_first_raw_save(self) -> None:
         self._maybe_prompt_support(
             key=self._PROMPT_FIRST_RAW_SAVE_KEY,
-            title="RAW Data Saved",
-            text="Your RAW data is saved.",
-            informative_text="If IOGraph is helpful to you, you can support its continued development.",
+            title=self._t("donate.raw_saved.title"),
+            text=self._t("donate.raw_saved.text"),
+            informative_text=self._t("donate.raw_saved.info"),
             source="first_raw_saved_popup",
         )
 
@@ -491,7 +531,14 @@ class MainWindow(QMainWindow):
         if self._settings.value(key, False, bool):
             return
         self._persist_option(key, True)
-        if show_support_prompt(self, title=title, text=text, informative_text=informative_text):
+        if show_support_prompt(
+            self,
+            title=title,
+            text=text,
+            informative_text=informative_text,
+            reject_text=self._t("support.maybe_later"),
+            accept_text=self._t("support.support_project"),
+        ):
             self._open_support_url(source)
 
     def _on_export_thread_closed(self) -> None:
@@ -529,7 +576,7 @@ class MainWindow(QMainWindow):
         if checked:
             self._refresh_desktop_snapshot()
         else:
-            self._status("Desktop background disabled")
+            self._status(self._t("desktop.background_disabled"))
 
     def _request_preview_rerender(self) -> None:
         if self._preview_render_thread is not None:
@@ -556,21 +603,21 @@ class MainWindow(QMainWindow):
         )
         self._preview_render_thread = thread
         self._preview_render_worker = worker
-        self._status(ExportController.preview_rendering_status())
+        self._status(ExportController.preview_rendering_status(tr=self._t))
         thread.start()
 
     def _on_preview_rerender_progress(self, request_id: int, image: QImage, pixel_scale: float) -> None:
         if request_id != self._preview_active_request_id:
             return
         self._canvas.apply_preview_image(image, pixel_scale)
-        self._status(ExportController.preview_rendering_status())
+        self._status(ExportController.preview_rendering_status(tr=self._t))
 
     def _on_preview_rerender_ready(self, request_id: int, image: QImage, pixel_scale: float) -> None:
         if request_id != self._preview_active_request_id:
             return
         if not self._canvas.apply_preview_image(image, pixel_scale):
             self._canvas.rebuild_from_raw_samples()
-        self._status(ExportController.preview_rendered_status())
+        self._status(ExportController.preview_rendered_status(tr=self._t))
         self._sync_ui_state()
 
     def _on_preview_rerender_failed(self, _error: str) -> None:
@@ -730,15 +777,33 @@ class MainWindow(QMainWindow):
         tracking = self._canvas.is_tracking()
         if not self._tracking_controller.should_show_timer_labels(elapsed_ms, tracking):
             return
-        self._total_time_label.setText(self._tracking_controller.tracking_time_text(elapsed_ms))
-        self._period_label.setText(self._tracking_controller.period_label())
+        self._total_time_label.setText(
+            self._tracking_controller.tracking_time_text(
+                elapsed_ms,
+                tr=self._t,
+                plural=self._i18n.plural,
+            )
+        )
+        self._period_label.setText(
+            self._tracking_controller.period_label(
+                tr=self._t,
+                format_time=self._i18n.format_time,
+                format_date=self._i18n.format_short_date,
+            )
+        )
         self._total_time_label.setVisible(True)
         self._period_label.setVisible(True)
         self._reset_btn.setVisible(self._tracking_controller.ui_state(elapsed_ms, tracking).reset_button_visible)
         self._sync_ui_state()
 
     def _build_export_base_name(self) -> str:
-        return self._tracking_controller.export_base_name(self._canvas.get_elapsed_ms(), app_name="IOGraphica")
+        return self._tracking_controller.export_base_name(
+            self._canvas.get_elapsed_ms(),
+            app_name="IOGraphica",
+            tr=self._t,
+            format_time=self._i18n.format_time,
+            format_date=self._i18n.format_short_date,
+        )
 
     def _set_tracking(self, enabled: bool) -> None:
         transition = self._tracking_controller.set_tracking_with_callbacks(
@@ -1086,8 +1151,8 @@ class MainWindow(QMainWindow):
     def _show_about_dialog(self) -> None:
         QMessageBox.information(
             self,
-            "About IOGraph",
-            f"IOGraph {self._app_version}\nTurn your routine work into contemporary art",
+            self._t("about.title"),
+            f"IOGraph {self._app_version}\n{self._t('about.tagline')}",
         )
 
     def _resolve_app_version(self) -> str:
@@ -1139,22 +1204,22 @@ class MainWindow(QMainWindow):
             if manual:
                 QMessageBox.information(
                     self,
-                    "Check for Updates",
-                    "Update download is in progress.\nPlease wait until it finishes.",
+                    self._t("update.check.idle"),
+                    self._t("update.download.running_wait"),
                 )
             return
         if self._update_controller.is_checking():
             if manual:
                 QMessageBox.information(
                     self,
-                    "Check for Updates",
-                    "Update check is already running.\nPlease wait a few seconds and try again.",
+                    self._t("update.check.idle"),
+                    self._t("update.check.running_wait"),
                 )
             return
         if not self._update_controller.start_check(self._app_version, manual):
             return
         self._set_update_check_busy(True)
-        self._status("Checking for updates...")
+        self._status(self._t("update.check.in_progress_lower"))
         return
 
     def _on_update_check_finished(self, manual: bool, result: dict) -> None:
@@ -1162,7 +1227,11 @@ class MainWindow(QMainWindow):
         ok = bool(result.get("ok", False))
         if not ok:
             if manual:
-                QMessageBox.warning(self, "Check for Updates", f"Unable to check for updates:\n{result.get('error', '')}")
+                QMessageBox.warning(
+                    self,
+                    self._t("update.check.idle"),
+                    self._t("update.check.unable_template").format(error=result.get("error", "")),
+                )
             return
         has_update = bool(result.get("has_update", False))
         latest_tag = str(result.get("latest_tag", ""))
@@ -1172,8 +1241,8 @@ class MainWindow(QMainWindow):
         asset_name = str(result.get("asset_name", ""))
         if not has_update:
             if manual:
-                QMessageBox.information(self, "Check for Updates", f"You are up to date ({self._app_version}).")
-            self._status("No updates found")
+                QMessageBox.information(self, self._t("update.check.idle"), f"{self._t('update.check.up_to_date')} ({self._app_version}).")
+            self._status(self._t("update.none_found"))
             return
         if not manual:
             last_downloaded = self._settings.value(SettingsKeys.UPDATE_LAST_AUTO_DOWNLOADED_VERSION, "", str)
@@ -1185,10 +1254,10 @@ class MainWindow(QMainWindow):
         if self._is_latest_update_already_downloaded(latest_tag):
             if manual:
                 downloaded_path = self._pending_downloaded_update_path()
-                message = UpdateUiDecisions.already_downloaded_prompt(downloaded_path)
+                message = UpdateUiDecisions.already_downloaded_prompt(downloaded_path, tr=self._t)
                 answer = QMessageBox.question(
                     self,
-                    "Update Ready",
+                    self._t("update.ready.title"),
                     message,
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.Yes,
@@ -1202,8 +1271,8 @@ class MainWindow(QMainWindow):
             buttons = QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
             answer = QMessageBox.question(
                 self,
-                "Update Available",
-                f"IOGraph {latest_version} is available.\n\nDownload now?",
+                self._t("update.available.title"),
+                self._t("update.available.prompt_template").format(version=latest_version),
                 buttons,
                 QMessageBox.StandardButton.Yes,
             )
@@ -1214,7 +1283,7 @@ class MainWindow(QMainWindow):
                 self._open_url(release_url)
             return
         self._start_update_download(latest_version, asset_url, asset_name, manual)
-        self._status("Update available")
+        self._status(self._t("update.available.status"))
 
     def _start_update_download(self, latest_version: str, asset_url: str, asset_name: str, manual: bool) -> None:
         if self._update_controller.is_downloading():
@@ -1225,7 +1294,7 @@ class MainWindow(QMainWindow):
         if not self._update_controller.start_download(latest_version, asset_url, str(target), manual):
             return
         self._set_update_check_busy(True)
-        self._status("Downloading update...")
+        self._status(self._t("update.download.in_progress_lower"))
         return
 
     def _update_target_path(self, asset_name: str, latest_version: str, manual: bool) -> Path:
@@ -1252,17 +1321,21 @@ class MainWindow(QMainWindow):
         self._signals.update_download_finished.emit(ok, path, error, manual)
         if not ok:
             if manual:
-                QMessageBox.warning(self, "Update Download", f"Failed to download IOGraph {latest_version}:\n{error}")
+                QMessageBox.warning(
+                    self,
+                    self._t("update.download.title"),
+                    self._t("update.download.failed_template").format(version=latest_version, error=error),
+                )
             else:
-                self._status("Background update download failed")
+                self._status(self._t("update.download.failed_background"))
             return
         local = Path(path)
         self._update_storage.register_download_result(local, latest_version, manual)
         self._update_install_update_actions()
-        prompt_message = UpdateUiDecisions.install_ready_prompt(local)
+        prompt_message = UpdateUiDecisions.install_ready_prompt(local, tr=self._t)
         prompt = QMessageBox.question(
             self,
-            "Update Ready",
+            self._t("update.ready.title"),
             prompt_message,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.Yes,
@@ -1270,16 +1343,17 @@ class MainWindow(QMainWindow):
         if prompt == QMessageBox.StandardButton.Yes:
             self._update_storage.reset_install_ignore_count()
             self._open_update_artifact(local)
-            self._status("Update downloaded")
+            self._status(self._t("update.download.done"))
             return
         self._update_storage.increment_install_ignore_count()
         self._update_tray_state()
-        self._status("Update downloaded")
+        self._status(self._t("update.download.done"))
 
     def _set_update_check_busy(self, busy: bool) -> None:
         label = check_updates_label(
             is_downloading=self._update_controller.is_downloading(),
             is_checking=self._update_controller.is_checking(),
+            tr=self._t,
         )
         apply_check_updates_status(
             label=label,
@@ -1297,6 +1371,7 @@ class MainWindow(QMainWindow):
             menu_action=getattr(self, "_install_downloaded_update_action", None),
             tray_action=getattr(self, "_tray_install_update_action", None),
             tray_separator_action=getattr(self, "_tray_update_sep_action", None),
+            tr=self._t,
         )
         self._update_tray_state()
 
@@ -1319,13 +1394,21 @@ class MainWindow(QMainWindow):
     def _open_downloaded_update(self) -> None:
         path = self._settings.value(SettingsKeys.UPDATE_LAST_DOWNLOADED_PATH, "", str)
         if not path:
-            QMessageBox.information(self, "Install Downloaded Update", "No downloaded update was found.")
+            QMessageBox.information(
+                self,
+                self._t("update.install.title"),
+                self._t("update.install.none_found"),
+            )
             return
         local = Path(path)
         if not local.exists():
             self._update_storage.clear_missing_download_file_state()
             self._update_install_update_actions()
-            QMessageBox.information(self, "Install Downloaded Update", "Downloaded update file no longer exists.")
+            QMessageBox.information(
+                self,
+                self._t("update.install.title"),
+                self._t("update.install.file_missing"),
+            )
             return
         self._update_storage.reset_install_ignore_count()
         self._open_update_artifact(local)
@@ -1346,18 +1429,26 @@ class MainWindow(QMainWindow):
 
     def _start_macos_zip_install(self, zip_path: Path) -> None:
         if self._mac_install_thread is not None:
-            QMessageBox.information(self, "Install Downloaded Update", "Update installation is already in progress.")
+            QMessageBox.information(
+                self,
+                self._t("update.install.title"),
+                self._t("update.install.in_progress"),
+            )
             return
         if not getattr(sys, "frozen", False):
-            QMessageBox.warning(self, "Install Downloaded Update", "Automatic install is available only in bundled app.")
+            QMessageBox.warning(
+                self,
+                self._t("update.install.title"),
+                self._t("update.install.auto_only_bundled"),
+            )
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(zip_path)))
             return
         current_team = ""
         current_app = self._current_macos_app_bundle_path()
         if current_app is not None:
             current_team = MacZipInstallWorker._codesign_team_identifier(current_app)
-        progress = QProgressDialog("Preparing update installation...", "", 0, 0, self)
-        progress.setWindowTitle("Installing Update")
+        progress = QProgressDialog(self._t("update.install.preparing"), "", 0, 0, self)
+        progress.setWindowTitle(self._t("update.install.installing_title"))
         progress.setCancelButton(None)
         progress.setWindowModality(Qt.WindowModality.ApplicationModal)
         progress.setMinimumDuration(0)
@@ -1392,11 +1483,11 @@ class MainWindow(QMainWindow):
             return
         QMessageBox.warning(
             self,
-            "Install Downloaded Update",
+            self._t("update.install.title"),
             (
-                "Automatic install failed. Opening downloaded package for manual installation."
+                self._t("update.install.auto_failed_open_manual")
                 if not error
-                else f"Automatic install failed: {error}\n\nOpening downloaded package for manual installation."
+                else self._t("update.install.auto_failed_with_error_template").format(error=error)
             ),
         )
         if zip_path is not None:
@@ -1431,6 +1522,96 @@ class MainWindow(QMainWindow):
             return
         self._set_auto_update_state(checked)
         self._persist_option(SettingsKeys.OPTION_AUTOMATIC_UPDATE, checked)
+
+    def _on_language_mode_selected(self, mode: str) -> None:
+        prev = self._i18n.current_mode()
+        current = self._i18n.set_language_mode(mode)
+        self._retranslate_ui()
+        self._sync_language_actions()
+        self._set_update_check_busy(False)
+        self._update_install_update_actions()
+        self._update_tray_state()
+        if current != prev:
+            self._sync_ui_state()
+
+    def _retranslate_ui(self) -> None:
+        self._file_menu.setTitle(f"&{self._t('menu.file')}")
+        self._tracking_menu.setTitle(f"&{self._t('menu.tracking')}")
+        self._options_menu.setTitle(f"&{self._t('menu.options')}")
+        self._help_menu.setTitle(f"&{self._t('menu.help')}")
+        self._language_menu.setTitle(self._t("menu.language"))
+        self._resources_menu.setTitle(self._t("menu.resources"))
+
+        self._save_image_action.setText(self._t("menu.save_image"))
+        self._save_csv_action.setText(self._t("menu.save_raw_data"))
+        self._reset_action.setText(self._t("menu.reset"))
+        self._exit_action.setText(self._t("menu.exit"))
+        self._tracking_reset_action.setText(self._t("menu.reset"))
+        self._ignore_stops_action.setText(self._t("menu.ignore_mouse_stops"))
+        self._colorful_action.setText(self._t("menu.colorful_scheme"))
+        self._use_desktop_action.setText(self._t("menu.use_desktop_background"))
+        self._multi_monitor_action.setText(self._t("menu.use_multiple_monitors"))
+        self._refresh_desktop_action.setText(self._t("menu.update_desktop_snapshot"))
+        self._check_updates_action.setText(
+            check_updates_label(
+                is_downloading=self._update_controller.is_downloading(),
+                is_checking=self._update_controller.is_checking(),
+                tr=self._t,
+            )
+        )
+        self._auto_update_action.setText(self._t("menu.auto_updates"))
+        self._about_action.setText(self._t("menu.about_iograph"))
+        self._about_iographica_action.setText(self._t("menu.about_iographica"))
+        self._website_action.setText(self._t("menu.iograph_website"))
+        self._source_action.setText(self._t("menu.get_source"))
+        self._support_action.setText(self._t("menu.support_iographica"))
+
+        for code, title in self._i18n.language_menu_options():
+            action = self._language_actions.get(code)
+            if action is not None:
+                action.setText(title)
+            tray_action = self._tray_language_actions.get(code)
+            if tray_action is not None:
+                tray_action.setText(title)
+
+        self._ignore_stops_box.setText(self._t("menu.ignore_mouse_stops"))
+        self._use_desktop_box.setText(self._t("menu.use_desktop_background"))
+        self._multi_monitor_box.setText(self._t("menu.use_multiple_monitors"))
+        self._colorful_box.setText(self._t("menu.colorful_scheme"))
+
+        self._total_time_label.setText(self._t("session.total_time"))
+        self._period_label.setText(self._t("session.time_period"))
+
+        if getattr(self, "_tray_icon", None) is not None:
+            self._tray_more_menu.setTitle(self._t("tray.more"))
+            self._tray_language_menu.setTitle(self._t("menu.language"))
+            self._tray_links_menu.setTitle(self._t("menu.resources"))
+            self._tray_install_update_action.setText(self._t("menu.update_now"))
+            self._tray_reset_action.setText(self._t("menu.reset"))
+            self._tray_save_image_action.setText(self._t("menu.save_image"))
+            self._tray_save_csv_action.setText(self._t("menu.save_raw_data"))
+            self._tray_check_updates_action.setText(
+                check_updates_label(
+                    is_downloading=self._update_controller.is_downloading(),
+                    is_checking=self._update_controller.is_checking(),
+                    tr=self._t,
+                )
+            )
+            self._tray_auto_update_action.setText(self._t("menu.auto_updates"))
+            self._tray_about_action.setText(self._t("menu.about_iograph"))
+            self._tray_about_iographica_action.setText(self._t("menu.about_iographica"))
+            self._tray_website_action.setText(self._t("menu.iograph_website"))
+            self._tray_source_action.setText(self._t("menu.get_source"))
+            self._tray_support_action.setText(self._t("menu.support_iographica"))
+            tray_exit_label = self._t("app.exit") if sys.platform.startswith("win") else self._t("app.quit")
+            self._tray_quit_action.setText(tray_exit_label)
+
+    def _sync_language_actions(self) -> None:
+        mode = self._i18n.current_mode()
+        for code, action in getattr(self, "_language_actions", {}).items():
+            action.setChecked(code == mode)
+        for code, action in getattr(self, "_tray_language_actions", {}).items():
+            action.setChecked(code == mode)
 
     def _set_auto_update_state(self, checked: bool) -> None:
         self._suppress_option_handlers = True
@@ -1480,11 +1661,11 @@ class MainWindow(QMainWindow):
         elapsed = self._canvas.get_elapsed_ms()
         tracking = self._canvas.is_tracking()
         ui_state = self._tracking_controller.ui_state(elapsed, tracking)
-        self._tray_toggle_action.setText(ui_state.toggle_label)
+        self._tray_toggle_action.setText(self._toggle_label(elapsed, tracking))
         self._tray_save_image_action.setEnabled(ui_state.can_save)
         self._tray_save_csv_action.setEnabled(ui_state.can_save)
         self._tray_reset_action.setEnabled(ui_state.can_reset)
-        self._tray_settings_action.setText(tray_settings_label(self._setup_btn.isChecked()))
+        self._tray_settings_action.setText(tray_settings_label(self._setup_btn.isChecked(), tr=self._t))
         tray.setIcon(self._tray_state_icon(tracking))
 
     def _sync_ui_state(self) -> None:
@@ -1503,13 +1684,23 @@ class MainWindow(QMainWindow):
         self._save_image_action.setEnabled(ui_state.can_save)
         self._save_csv_action.setEnabled(ui_state.can_save)
 
-        self._tracking_toggle_action.setText(ui_state.toggle_label)
+        self._tracking_toggle_action.setText(self._toggle_label(elapsed, tracking))
 
         # Safety net: if async preview rerender already finished, ensure central toggle is visible.
         if self._preview_render_thread is None and not self._toggle_btn.isVisible():
             self._toggle_btn.setVisible(True)
 
         self._update_tray_state()
+
+    def _t(self, source_text: str) -> str:
+        return self._i18n.tr(source_text)
+
+    def _toggle_label(self, elapsed_ms: int, tracking: bool) -> str:
+        if tracking:
+            return self._t("menu.pause")
+        if elapsed_ms == 0:
+            return self._t("menu.start")
+        return self._t("menu.resume")
 
 
 def main() -> None:

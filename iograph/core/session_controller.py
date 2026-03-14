@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import re
 
 from PyQt6.QtCore import QObject, pyqtSignal
 
@@ -11,9 +12,8 @@ class SessionController(QObject):
     session_reset = pyqtSignal()
     session_restored = pyqtSignal()
 
-    def __init__(self, month_names: tuple[str, ...], parent: QObject | None = None) -> None:
+    def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
-        self._month_names = month_names
         self._started_at: datetime | None = None
         self._ended_at: datetime | None = None
 
@@ -65,63 +65,66 @@ class SessionController(QObject):
         if self._started_at is None and elapsed_ms > 0:
             self._started_at = datetime.now()
 
-    def period_label(self) -> str:
+    def period_label(self, *, tr=lambda s: s, format_time=None, format_date=None) -> str:
         started = self._started_at
         if started is None:
-            return "Time Period"
+            return tr("session.time_period")
         ended = self._ended_at or datetime.now()
+        time_formatter = format_time or (lambda dt: f"{dt.hour:02d}:{dt.minute:02d}")
+        date_formatter = format_date or (lambda dt: f"{dt.day:02d}.{dt.month:02d}")
         if (ended - started).total_seconds() <= 60:
-            return f"From {self._date_pattern(started, False)}"
+            return tr("session.period.from_template").format(start=time_formatter(started))
         full_date_treatment = started.day != ended.day or started.month != ended.month
-        return f"From {self._date_pattern(started, full_date_treatment)} to {self._date_pattern(ended, full_date_treatment)}"
+        start_label = time_formatter(started) if not full_date_treatment else f"{time_formatter(started)} {date_formatter(started)}"
+        end_label = time_formatter(ended) if not full_date_treatment else f"{time_formatter(ended)} {date_formatter(ended)}"
+        return tr("session.period.from_to_template").format(
+            start=start_label,
+            end=end_label,
+        )
 
-    def export_base_name(self, elapsed_ms: int, app_name: str = "IOGraphica") -> str:
-        time_label = self.tracking_time_text(elapsed_ms)
-        period = self.period_label()
+    def export_base_name(
+        self,
+        elapsed_ms: int,
+        app_name: str = "IOGraphica",
+        *,
+        tr=lambda s: s,
+        format_time=None,
+        format_date=None,
+    ) -> str:
+        time_label = self.tracking_time_text(elapsed_ms, tr=tr)
+        period = self.period_label(tr=tr, format_time=format_time, format_date=format_date)
+        safe_app = self._sanitize_filename_component(app_name)
+        safe_time = self._sanitize_filename_component(time_label)
         if not period:
-            return f"{app_name} - {time_label}"
-        period_for_file = period.replace(":", "-")
-        period_for_file = period_for_file[0].lower() + period_for_file[1:]
-        return f"{app_name} - {time_label} ({period_for_file})"
+            return f"{safe_app} - {safe_time}"
+        safe_period = self._sanitize_filename_component(period)
+        return f"{safe_app} - {safe_time} ({safe_period})"
 
     @classmethod
-    def tracking_time_text(cls, ms: int) -> str:
-        if ms < 1000:
-            return "Just started"
-        seconds = ms / 1000.0
-        minutes = ms / (60.0 * 1000.0)
-        hours = ms / (60.0 * 60.0 * 1000.0)
-        days = ms / (24.0 * 60.0 * 60.0 * 1000.0)
-        if minutes < 1.0:
-            n = int(seconds)
-            return f"{n} second" if n == 1 else f"{n} seconds"
-        if hours < 1.0:
-            n = int(minutes)
-            return f"{n} minute" if n == 1 else f"{n} minutes"
-        if days < 1.0:
-            n = cls._precision(hours)
-            return f"{n} hour" if hours < 1.1 else f"{n} hours"
-        n = cls._precision(days)
-        return f"{n} day" if days < 1.1 else f"{n} days"
-
-    def _date_pattern(self, dt: datetime, full_date: bool) -> str:
-        base = f"{dt.hour}:{dt.minute:02d}"
-        if not full_date:
-            return base
-        return f"{base} {self._month_names[dt.month - 1]} {self._ordinal(dt.day)}"
+    def tracking_time_text(cls, ms: int, *, tr=lambda s: s, plural=None) -> str:
+        total_seconds = max(0, int(ms / 1000.0))
+        if total_seconds < 1:
+            return tr("session.time.just_started")
+        plural_fn = plural or (lambda key_base, value: tr(f"{key_base}.one") if value == 1 else tr(f"{key_base}.other"))
+        if total_seconds < 60:
+            return cls._pluralize(total_seconds, "session.time.second", plural=plural_fn)
+        total_minutes = total_seconds // 60
+        if total_minutes < 60:
+            return cls._pluralize(total_minutes, "session.time.minute", plural=plural_fn)
+        total_hours = total_minutes // 60
+        if total_hours < 24:
+            return cls._pluralize(total_hours, "session.time.hour", plural=plural_fn)
+        total_days = total_hours // 24
+        return cls._pluralize(total_days, "session.time.day", plural=plural_fn)
 
     @staticmethod
-    def _ordinal(day: int) -> str:
-        if day == 1:
-            return "1st"
-        if day == 2:
-            return "2nd"
-        if day == 3:
-            return "3rd"
-        return f"{day}th"
+    def _pluralize(value: int, key_base: str, *, plural) -> str:
+        return plural(key_base, value).format(value=value)
 
     @staticmethod
-    def _precision(value: float) -> str:
-        if value % 1.0 < 0.1:
-            return str(int(value))
-        return f"{value:.1f}"
+    def _sanitize_filename_component(text: str) -> str:
+        # Keep locale text readable but remove filesystem-invalid chars.
+        cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1F]+', "-", str(text))
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        cleaned = cleaned.rstrip(". ")
+        return cleaned or "session"

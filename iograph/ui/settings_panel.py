@@ -18,6 +18,7 @@ class SettingsPanelRefs:
 def build_settings_panel(
     parent: QWidget,
     *,
+    tr,
     on_refresh_desktop_snapshot,
     on_update_desktop_pressed,
     on_update_desktop_released,
@@ -28,7 +29,7 @@ def build_settings_panel(
     control_layout.setHorizontalSpacing(24)
     control_layout.setVerticalSpacing(0)
 
-    ignore_stops_box = QCheckBox("Ignore Mouse Stops", parent)
+    ignore_stops_box = QCheckBox(tr("menu.ignore_mouse_stops"), parent)
     control_layout.setAlignment(ignore_stops_box, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
     control_layout.addWidget(ignore_stops_box, 0, 0)
 
@@ -37,7 +38,7 @@ def build_settings_panel(
     desktop_row_layout.setContentsMargins(0, 0, 0, 0)
     desktop_row_layout.setSpacing(6)
 
-    use_desktop_box = QCheckBox("Use Desktop", desktop_row)
+    use_desktop_box = QCheckBox(tr("menu.use_desktop_background"), desktop_row)
     desktop_row_layout.addWidget(use_desktop_box, 0)
 
     update_desktop_btn = QPushButton(desktop_row)
@@ -58,7 +59,7 @@ def build_settings_panel(
     control_layout.setAlignment(desktop_row, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
     control_layout.addWidget(desktop_row, 0, 1)
 
-    multi_monitor_box = QCheckBox("Use Multiple Monitors", parent)
+    multi_monitor_box = QCheckBox(tr("menu.use_multiple_monitors"), parent)
     control_layout.setAlignment(multi_monitor_box, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
     control_layout.addWidget(multi_monitor_box, 1, 0)
 
@@ -66,7 +67,7 @@ def build_settings_panel(
     colorful_row_layout = QHBoxLayout(colorful_row)
     colorful_row_layout.setContentsMargins(0, 0, 0, 0)
     colorful_row_layout.setSpacing(0)
-    colorful_box = QCheckBox("Use Colorful Scheme", colorful_row)
+    colorful_box = QCheckBox(tr("menu.colorful_scheme"), colorful_row)
     colorful_row_layout.addWidget(colorful_box, 0)
     colorful_row_layout.addStretch(1)
     control_layout.setAlignment(colorful_row, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)

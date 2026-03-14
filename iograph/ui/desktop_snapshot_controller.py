@@ -20,12 +20,14 @@ class DesktopSnapshotController:
         *,
         capture_desktop_background,
         on_status,
+        tr=lambda s: s,
         hide_delay_ms: int = 40,
         final_delay_ms: int = 160,
     ) -> None:
         self._window = window
         self._capture_desktop_background = capture_desktop_background
         self._on_status = on_status
+        self._tr = tr
         self._hide_delay_ms = int(hide_delay_ms)
         self._final_delay_ms = int(final_delay_ms)
         self._restore = _SnapshotRestoreState()
@@ -64,4 +66,6 @@ class DesktopSnapshotController:
                 self._window.raise_()
                 self._window.activateWindow()
         self._restore.position = None
-        self._on_status("Desktop snapshot updated" if ok else "Failed to capture desktop snapshot")
+        self._on_status(
+            self._tr("desktop.snapshot.updated") if ok else self._tr("desktop.snapshot.failed")
+        )

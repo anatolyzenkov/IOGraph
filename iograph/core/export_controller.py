@@ -31,24 +31,24 @@ class ExportController:
         return ExportUiState(can_save_image=not export_in_progress)
 
     @staticmethod
-    def export_start_status() -> str:
-        return "Exporting image..."
+    def export_start_status(*, tr=lambda s: s) -> str:
+        return tr("export.status.exporting")
 
     @staticmethod
-    def export_finished_status(ok: bool) -> str:
-        return "Image saved" if ok else "Failed to save image"
+    def export_finished_status(ok: bool, *, tr=lambda s: s) -> str:
+        return tr("export.status.saved") if ok else tr("export.status.failed")
 
     @staticmethod
     def should_prompt_support_after_image_save(ok: bool) -> bool:
         return bool(ok)
 
     @staticmethod
-    def preview_rendering_status() -> str:
-        return "Rendering preview..."
+    def preview_rendering_status(*, tr=lambda s: s) -> str:
+        return tr("export.status.preview_rendering")
 
     @staticmethod
-    def preview_rendered_status() -> str:
-        return "Preview rendered"
+    def preview_rendered_status(*, tr=lambda s: s) -> str:
+        return tr("export.status.preview_ready")
 
     @staticmethod
     def create_export_worker(
