@@ -260,6 +260,7 @@ Ship IOGraph Python + PyQt as production app with stable update flow.
   - `sv` (Swedish)
   - `nl` (Dutch)
   - `pl` (Polish)
+  - `el` (Greek)
 - Extended `SUPPORTED_LANGUAGES` and `LANGUAGE_LABELS` in `iograph/services/i18n.py`.
 - Added base menu/update translation entries in `_TRANSLATIONS` for all new languages.
 - Added runtime/session/dialog coverage entries in `_EXTRA_TRANSLATIONS` for all new languages.
@@ -289,7 +290,10 @@ Ship IOGraph Python + PyQt as production app with stable update flow.
   - `effective_qlocale()`
   - `format_time(...)`
   - `format_short_date(...)`
-- Session period label now uses locale-aware date/time formatting (via callbacks from `MainWindow`), while keeping localized `From ... to ...` templates.
+- Session period label uses locale-aware date/time formatting (via callbacks from `MainWindow`), while keeping localized `From ... to ...` templates.
+- Final rule for formatting:
+  - UI language controls translated text labels
+  - system regional settings (`QLocale.system()`) control time/date punctuation and 12h/24h format
 
 ## Git workflow (single-maintainer, latest)
 - Feature branches can be kept local by default.
