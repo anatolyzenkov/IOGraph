@@ -772,6 +772,34 @@ class I18nService:
         return options
 
     @classmethod
+    def translation_ids(cls) -> tuple[str, ...]:
+        return tuple(cls._KEY_TO_SOURCE.keys())
+
+    @classmethod
+    def missing_translation_ids(cls, language: str) -> list[str]:
+        if language == cls.DEFAULT_LANGUAGE:
+            return []
+        source_map = cls._TRANSLATIONS.get(language, {})
+        missing: list[str] = []
+        for key, source in cls._KEY_TO_SOURCE.items():
+            if source not in source_map:
+                missing.append(key)
+        return missing
+
+    @classmethod
+    def translation_coverage_report(cls) -> dict[str, dict[str, int]]:
+        total = len(cls._KEY_TO_SOURCE)
+        report: dict[str, dict[str, int]] = {}
+        for lang in cls.SUPPORTED_LANGUAGES:
+            missing = len(cls.missing_translation_ids(lang))
+            report[lang] = {
+                "total": total,
+                "translated": total - missing,
+                "missing": missing,
+            }
+        return report
+
+    @classmethod
     def _resolve_system_language(cls) -> str:
         locale = QLocale.system()
         bcp47 = (locale.bcp47Name() or "").strip()
