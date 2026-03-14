@@ -288,6 +288,18 @@ Ship IOGraph Python + PyQt as production app with stable update flow.
   - `format_short_date(...)`
 - Session period label now uses locale-aware date/time formatting (via callbacks from `MainWindow`), while keeping localized `From ... to ...` templates.
 
+## Git workflow (single-maintainer, latest)
+- Feature branches can be kept local by default.
+- Primary integration path:
+  1. develop locally in `feature/*`
+  2. merge locally into `python-port`
+  3. continue work from local `python-port`
+- Push to GitHub only on explicit request:
+  - when publishing RC/release
+  - or when checkpoint backup is explicitly requested
+- Keep remote noise low:
+  - delete remote feature branches after local merge unless explicitly needed.
+
 ## Locale variants polishing (2026-03-14, latest)
 - Migrated translation dictionary keys from legacy:
   - `es` -> `es-419`
