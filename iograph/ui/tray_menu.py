@@ -9,6 +9,9 @@ from PyQt6.QtWidgets import QMenu
 @dataclass(frozen=True)
 class TrayMenuRefs:
     menu: QMenu
+    more_menu: QMenu
+    language_menu: QMenu
+    links_menu: QMenu
     install_update_action: object
     update_separator_action: object
     toggle_action: object
@@ -18,6 +21,12 @@ class TrayMenuRefs:
     settings_action: object
     check_updates_action: object
     auto_update_action: object
+    about_action: object
+    quit_action: object
+    about_iographica_action: object
+    website_action: object
+    source_action: object
+    support_action: object
     language_actions: dict[str, object]
 
 
@@ -86,21 +95,26 @@ def build_tray_menu(
         language_group.addAction(action)
         language_menu.addAction(action)
         language_actions[code] = action
+        if code == "auto":
+            language_menu.addSeparator()
 
     more_menu.addSeparator()
     links_menu = more_menu.addMenu(tr("menu.resources"))
-    links_menu.addAction(tr("menu.about_iographica"), on_open_about_iographica)
-    links_menu.addAction(tr("menu.iograph_website"), on_open_website)
-    links_menu.addAction(tr("menu.get_source"), on_open_source)
-    links_menu.addAction(tr("menu.support_iographica"), on_open_support)
+    about_iographica_action = links_menu.addAction(tr("menu.about_iographica"), on_open_about_iographica)
+    website_action = links_menu.addAction(tr("menu.iograph_website"), on_open_website)
+    source_action = links_menu.addAction(tr("menu.get_source"), on_open_source)
+    support_action = links_menu.addAction(tr("menu.support_iographica"), on_open_support)
 
     more_menu.addSeparator()
-    more_menu.addAction(tr("menu.about_iograph"), on_about)
+    about_action = more_menu.addAction(tr("menu.about_iograph"), on_about)
     tray_menu.addSeparator()
-    tray_menu.addAction(tray_exit_label, on_quit)
+    quit_action = tray_menu.addAction(tray_exit_label, on_quit)
 
     return TrayMenuRefs(
         menu=tray_menu,
+        more_menu=more_menu,
+        language_menu=language_menu,
+        links_menu=links_menu,
         install_update_action=tray_install_update_action,
         update_separator_action=tray_update_sep_action,
         toggle_action=tray_toggle_action,
@@ -110,5 +124,11 @@ def build_tray_menu(
         settings_action=tray_settings_action,
         check_updates_action=tray_check_updates_action,
         auto_update_action=tray_auto_update_action,
+        about_action=about_action,
+        quit_action=quit_action,
+        about_iographica_action=about_iographica_action,
+        website_action=website_action,
+        source_action=source_action,
+        support_action=support_action,
         language_actions=language_actions,
     )

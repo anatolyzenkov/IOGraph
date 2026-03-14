@@ -12,8 +12,9 @@ def sync_install_update_actions(
     menu_action,
     tray_action,
     tray_separator_action,
+    tr=lambda s: s,
 ) -> None:
-    label = UpdateUiDecisions.install_action_label(downloaded_path)
+    label = UpdateUiDecisions.install_action_label(downloaded_path, tr=tr)
     if menu_action is not None:
         menu_action.setText(label)
         menu_action.setEnabled(has_downloaded_update)

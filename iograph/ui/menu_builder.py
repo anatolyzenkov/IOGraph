@@ -7,9 +7,16 @@ from PyQt6.QtGui import QAction, QActionGroup
 
 @dataclass(frozen=True)
 class MenuActionRefs:
+    file_menu: object
+    tracking_menu: object
+    options_menu: object
+    help_menu: object
+    language_menu: object
+    resources_menu: object
     save_image_action: object
     save_csv_action: object
     reset_action: object
+    exit_action: object
     tracking_toggle_action: object
     tracking_reset_action: object
     ignore_stops_action: object
@@ -20,6 +27,11 @@ class MenuActionRefs:
     check_updates_action: object
     auto_update_action: object
     install_downloaded_update_action: object
+    about_action: object
+    about_iographica_action: object
+    website_action: object
+    source_action: object
+    support_action: object
     language_actions: dict[str, object]
 
 
@@ -124,6 +136,8 @@ def build_main_menu(
         language_group.addAction(action)
         language_menu.addAction(action)
         language_actions[code] = action
+        if code == "auto":
+            language_menu.addSeparator()
 
     about_action = QAction(tr("menu.about_iograph"), parent)
     about_action.triggered.connect(on_about)
@@ -145,15 +159,22 @@ def build_main_menu(
 
     help_menu.addSeparator()
     resources_menu = help_menu.addMenu(tr("menu.resources"))
-    resources_menu.addAction(tr("menu.about_iographica"), on_open_about_iographica)
-    resources_menu.addAction(tr("menu.iograph_website"), on_open_website)
-    resources_menu.addAction(tr("menu.get_source"), on_open_source)
-    resources_menu.addAction(tr("menu.support_iographica"), on_open_support)
+    about_iographica_action = resources_menu.addAction(tr("menu.about_iographica"), on_open_about_iographica)
+    website_action = resources_menu.addAction(tr("menu.iograph_website"), on_open_website)
+    source_action = resources_menu.addAction(tr("menu.get_source"), on_open_source)
+    support_action = resources_menu.addAction(tr("menu.support_iographica"), on_open_support)
 
     return MenuActionRefs(
+        file_menu=file_menu,
+        tracking_menu=tracking_menu,
+        options_menu=options_menu,
+        help_menu=help_menu,
+        language_menu=language_menu,
+        resources_menu=resources_menu,
         save_image_action=save_image_action,
         save_csv_action=save_csv_action,
         reset_action=reset_action,
+        exit_action=exit_action,
         tracking_toggle_action=tracking_toggle_action,
         tracking_reset_action=tracking_reset_action,
         ignore_stops_action=ignore_stops_action,
@@ -164,5 +185,10 @@ def build_main_menu(
         check_updates_action=check_updates_action,
         auto_update_action=auto_update_action,
         install_downloaded_update_action=install_downloaded_action,
+        about_action=about_action,
+        about_iographica_action=about_iographica_action,
+        website_action=website_action,
+        source_action=source_action,
+        support_action=support_action,
         language_actions=language_actions,
     )

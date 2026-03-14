@@ -97,14 +97,28 @@ class TrackingController(QObject):
     def should_show_timer_labels(elapsed_ms: int, tracking: bool) -> bool:
         return TrackingUiDecisions.should_show_timer_labels(elapsed_ms, tracking)
 
-    def tracking_time_text(self, elapsed_ms: int) -> str:
-        return SessionController.tracking_time_text(elapsed_ms)
+    def tracking_time_text(self, elapsed_ms: int, *, tr=lambda s: s, plural=None) -> str:
+        return SessionController.tracking_time_text(elapsed_ms, tr=tr, plural=plural)
 
-    def period_label(self) -> str:
-        return self._session.period_label()
+    def period_label(self, *, tr=lambda s: s, format_time=None, format_date=None) -> str:
+        return self._session.period_label(tr=tr, format_time=format_time, format_date=format_date)
 
-    def export_base_name(self, elapsed_ms: int, app_name: str = "IOGraphica") -> str:
-        return self._session.export_base_name(elapsed_ms, app_name=app_name)
+    def export_base_name(
+        self,
+        elapsed_ms: int,
+        app_name: str = "IOGraphica",
+        *,
+        tr=lambda s: s,
+        format_time=None,
+        format_date=None,
+    ) -> str:
+        return self._session.export_base_name(
+            elapsed_ms,
+            app_name=app_name,
+            tr=tr,
+            format_time=format_time,
+            format_date=format_date,
+        )
 
     def session_timestamps_payload(self) -> dict[str, str | None]:
         return {
@@ -117,14 +131,26 @@ class TrackingController(QObject):
         return elapsed_ms > 0
 
     @staticmethod
-    def build_reset_confirmation_message(base_message: str, elapsed_ms: int) -> str:
-        return TrackingUiDecisions.extend_reset_message_for_long_tracking(base_message, elapsed_ms)
+    def build_reset_confirmation_message(
+        base_message: str,
+        elapsed_ms: int,
+        *,
+        tr=lambda s: s,
+        plural=None,
+        time_text: str = "",
+    ) -> str:
+        if elapsed_ms <= TrackingUiDecisions.LONG_TRACKING_CONFIRM_MS:
+            return base_message
+        duration = time_text or SessionController.tracking_time_text(elapsed_ms, tr=tr, plural=plural)
+        suffix = tr("session.reset.long_prompt_template").format(duration=duration)
+        return f"{base_message}\n{suffix}"
 
     @classmethod
-    def build_reset_request(cls, elapsed_ms: int) -> ResetRequest:
+    def build_reset_request(cls, elapsed_ms: int, *, tr=lambda s: s, plural=None) -> ResetRequest:
         if not cls.needs_reset_confirmation(elapsed_ms):
             return ResetRequest(requires_confirmation=False, message="")
-        message = cls.build_reset_confirmation_message("Do you really want to start from scratch?", elapsed_ms)
+        base = tr("session.reset.base_prompt")
+        message = cls.build_reset_confirmation_message(base, elapsed_ms, tr=tr, plural=plural)
         return ResetRequest(requires_confirmation=True, message=message)
 
     def apply_reset_decision_with_callbacks(
