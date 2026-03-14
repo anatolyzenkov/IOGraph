@@ -33,6 +33,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Install Linux system dependencies (PyQt6)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libegl1 \
+            libgl1 \
+            libxkbcommon-x11-0
+
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
