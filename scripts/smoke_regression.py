@@ -3,6 +3,7 @@ from __future__ import annotations
 import compileall
 import importlib
 import sys
+import traceback
 from pathlib import Path
 
 
@@ -40,7 +41,12 @@ def main() -> int:
         return 1
 
     for name in MODULES:
-        importlib.import_module(name)
+        try:
+            importlib.import_module(name)
+        except Exception:
+            print(f"Smoke import failed for module: {name}")
+            traceback.print_exc()
+            return 1
 
     print("Smoke regression check passed")
     return 0
