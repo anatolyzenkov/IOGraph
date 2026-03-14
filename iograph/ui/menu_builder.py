@@ -12,7 +12,6 @@ class MenuActionRefs:
     options_menu: object
     help_menu: object
     language_menu: object
-    resources_menu: object
     save_image_action: object
     save_csv_action: object
     reset_action: object
@@ -157,11 +156,10 @@ def build_main_menu(
     about_action.triggered.connect(on_about)
     help_menu.addAction(about_action)
     help_menu.addSeparator()
-    resources_menu = help_menu.addMenu(tr("menu.resources"))
-    about_iographica_action = resources_menu.addAction(tr("menu.about_iographica"), on_open_about_iographica)
-    website_action = resources_menu.addAction(tr("menu.iograph_website"), on_open_website)
-    source_action = resources_menu.addAction(tr("menu.get_source"), on_open_source)
-    support_action = resources_menu.addAction(tr("menu.support_iographica"), on_open_support)
+    about_iographica_action = help_menu.addAction(tr("menu.about_iographica"), on_open_about_iographica)
+    website_action = help_menu.addAction(tr("menu.iograph_website"), on_open_website)
+    source_action = help_menu.addAction(tr("menu.get_source"), on_open_source)
+    support_action = help_menu.addAction(tr("menu.support_iographica"), on_open_support)
 
     return MenuActionRefs(
         file_menu=file_menu,
@@ -169,7 +167,6 @@ def build_main_menu(
         options_menu=options_menu,
         help_menu=help_menu,
         language_menu=language_menu,
-        resources_menu=resources_menu,
         save_image_action=save_image_action,
         save_csv_action=save_csv_action,
         reset_action=reset_action,

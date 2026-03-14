@@ -329,7 +329,6 @@ class MainWindow(QMainWindow):
         self._options_menu = refs.options_menu
         self._help_menu = refs.help_menu
         self._language_menu = refs.language_menu
-        self._resources_menu = refs.resources_menu
         self._about_action = refs.about_action
         self._about_iographica_action = refs.about_iographica_action
         self._website_action = refs.website_action
@@ -1540,7 +1539,6 @@ class MainWindow(QMainWindow):
         self._options_menu.setTitle(f"&{self._t('menu.options')}")
         self._help_menu.setTitle(f"&{self._t('menu.help')}")
         self._language_menu.setTitle(self._t("menu.language"))
-        self._resources_menu.setTitle(self._t("menu.resources"))
 
         self._save_image_action.setText(self._t("menu.save_image"))
         self._save_csv_action.setText(self._t("menu.save_raw_data"))
