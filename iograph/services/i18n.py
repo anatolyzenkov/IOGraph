@@ -2164,10 +2164,13 @@ class I18nService:
         return QLocale.system()
 
     def format_time(self, dt) -> str:
-        return self.effective_qlocale().toString(dt.time(), QLocale.FormatType.ShortFormat)
+        # Time format should follow user's system regional preference (e.g. 24h),
+        # independent from selected UI language.
+        return QLocale.system().toString(dt.time(), QLocale.FormatType.ShortFormat)
 
     def format_short_date(self, dt) -> str:
-        return self.effective_qlocale().toString(dt.date(), QLocale.FormatType.ShortFormat)
+        # Date format should follow user's system regional preference.
+        return QLocale.system().toString(dt.date(), QLocale.FormatType.ShortFormat)
 
     @staticmethod
     def _language_fallback_chain(lang: str) -> tuple[str, ...]:
