@@ -18,5 +18,5 @@ def show_window_on_top(window) -> None:
     QTimer.singleShot(0, window.activateWindow)
 
 
-def tray_settings_label(is_settings_open: bool) -> str:
-    return "Hide Settings" if is_settings_open else "Show Settings"
+def tray_settings_label(is_settings_open: bool, *, tr=lambda s: s) -> str:
+    return tr("Hide Settings") if is_settings_open else tr("Show Settings")

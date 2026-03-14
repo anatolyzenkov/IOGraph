@@ -285,6 +285,10 @@ class MainWindow(QMainWindow):
     def _setup_actions(self) -> None:
         refs = build_main_menu(
             self,
+            tr=self._t,
+            language_options=self._i18n.language_menu_options(),
+            current_language_mode=self._i18n.current_mode(),
+            on_language_mode_selected=self._on_language_mode_selected,
             on_save_image=self._save_image,
             on_save_csv=self._save_csv,
             on_reset=self._reset_canvas,
@@ -317,6 +321,7 @@ class MainWindow(QMainWindow):
         self._check_updates_action = refs.check_updates_action
         self._auto_update_action = refs.auto_update_action
         self._install_downloaded_update_action = refs.install_downloaded_update_action
+        self._language_actions = refs.language_actions
 
     def _setup_tray(self) -> None:
         if not QSystemTrayIcon.isSystemTrayAvailable():
@@ -324,9 +329,13 @@ class MainWindow(QMainWindow):
             return
         self._tray_icon = QSystemTrayIcon(self)
         self._tray_icon.setIcon(self._tray_state_icon(tracking=False))
-        tray_exit_label = "Exit" if sys.platform.startswith("win") else "Quit"
+        tray_exit_label = self._t("Exit") if sys.platform.startswith("win") else self._t("Quit")
         refs = build_tray_menu(
             self,
+            tr=self._t,
+            language_options=self._i18n.language_menu_options(),
+            current_language_mode=self._i18n.current_mode(),
+            on_language_mode_selected=self._on_language_mode_selected,
             tray_exit_label=tray_exit_label,
             on_open_downloaded_update=self._open_downloaded_update,
             on_toggle_tracking=lambda: self._set_tracking(not self._canvas.is_tracking()),
@@ -352,10 +361,12 @@ class MainWindow(QMainWindow):
         self._tray_settings_action = refs.settings_action
         self._tray_check_updates_action = refs.check_updates_action
         self._tray_auto_update_action = refs.auto_update_action
+        self._tray_language_actions = refs.language_actions
         self._tray_icon.setContextMenu(refs.menu)
         self._tray_icon.activated.connect(self._on_tray_activated)
         self._tray_icon.show()
         self._set_auto_update_state(self._auto_update_action.isChecked())
+        self._sync_language_actions()
         self._update_tray_state()
 
     def _bind_control_panel(self) -> None:
@@ -1282,6 +1293,7 @@ class MainWindow(QMainWindow):
         label = check_updates_label(
             is_downloading=self._update_controller.is_downloading(),
             is_checking=self._update_controller.is_checking(),
+            tr=self._t,
         )
         apply_check_updates_status(
             label=label,
@@ -1434,6 +1446,27 @@ class MainWindow(QMainWindow):
         self._set_auto_update_state(checked)
         self._persist_option(SettingsKeys.OPTION_AUTOMATIC_UPDATE, checked)
 
+    def _on_language_mode_selected(self, mode: str) -> None:
+        prev = self._i18n.current_mode()
+        current = self._i18n.set_language_mode(mode)
+        self._sync_language_actions()
+        self._set_update_check_busy(False)
+        self._update_install_update_actions()
+        self._update_tray_state()
+        if current != prev:
+            QMessageBox.information(
+                self,
+                "Language",
+                "Language preference saved. Some labels may require app restart to fully apply.",
+            )
+
+    def _sync_language_actions(self) -> None:
+        mode = self._i18n.current_mode()
+        for code, action in getattr(self, "_language_actions", {}).items():
+            action.setChecked(code == mode)
+        for code, action in getattr(self, "_tray_language_actions", {}).items():
+            action.setChecked(code == mode)
+
     def _set_auto_update_state(self, checked: bool) -> None:
         self._suppress_option_handlers = True
         try:
@@ -1486,7 +1519,7 @@ class MainWindow(QMainWindow):
         self._tray_save_image_action.setEnabled(ui_state.can_save)
         self._tray_save_csv_action.setEnabled(ui_state.can_save)
         self._tray_reset_action.setEnabled(ui_state.can_reset)
-        self._tray_settings_action.setText(tray_settings_label(self._setup_btn.isChecked()))
+        self._tray_settings_action.setText(tray_settings_label(self._setup_btn.isChecked(), tr=self._t))
         tray.setIcon(self._tray_state_icon(tracking))
 
     def _sync_ui_state(self) -> None:
