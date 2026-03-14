@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from PyQt6.QtCore import QLocale
 
 from .settings import AppSettings, SettingsKeys
@@ -399,6 +401,7 @@ class I18nService:
             "If IOGraph is helpful to you, you can support its continued development.": "Se o IOGraph é útil para você, você pode apoiar seu desenvolvimento contínuo.",
             "Desktop background disabled": "Plano de fundo da área de trabalho desativado",
             "About IOGraph": "Sobre o IOGraph",
+            "Turn your routine work into contemporary art": "Transforme seu trabalho rotineiro em arte contemporânea",
             "Update download is in progress.\nPlease wait until it finishes.": "O download da atualização está em andamento.\nAguarde até terminar.",
             "Update check is already running.\nPlease wait a few seconds and try again.": "A verificação de atualização já está em andamento.\nAguarde alguns segundos e tente novamente.",
             "Checking for updates...": "Verificando atualizações...",
@@ -494,6 +497,7 @@ class I18nService:
             "If IOGraph is helpful to you, you can support its continued development.": "Se IOGraph ti è utile, puoi supportarne lo sviluppo continuo.",
             "Desktop background disabled": "Sfondo del desktop disattivato",
             "About IOGraph": "Informazioni su IOGraph",
+            "Turn your routine work into contemporary art": "Trasforma il tuo lavoro di routine in arte contemporanea",
             "Update download is in progress.\nPlease wait until it finishes.": "Il download dell'aggiornamento è in corso.\nAttendi che finisca.",
             "Update check is already running.\nPlease wait a few seconds and try again.": "Il controllo aggiornamenti è già in corso.\nAttendi qualche secondo e riprova.",
             "Checking for updates...": "Controllo aggiornamenti...",
@@ -1266,6 +1270,7 @@ class I18nService:
             "You are up to date": "Du bist auf dem neuesten Stand",
             "Automatic install failed. Opening downloaded package for manual installation.": "Automatische Installation fehlgeschlagen. Das heruntergeladene Paket wird zur manuellen Installation geöffnet.",
             "Language preference saved. Some labels may require app restart to fully apply.": "Spracheinstellung gespeichert. Einige Beschriftungen erfordern möglicherweise einen Neustart der App, um vollständig übernommen zu werden.",
+            "Turn your routine work into contemporary art": "Verwandle deine Routinearbeit in zeitgenössische Kunst",
         },
         "fr": {
             "Ready": "Prêt",
@@ -1304,6 +1309,7 @@ class I18nService:
             "You are up to date": "Vous êtes à jour",
             "Automatic install failed. Opening downloaded package for manual installation.": "L'installation automatique a échoué. Ouverture du package téléchargé pour une installation manuelle.",
             "Language preference saved. Some labels may require app restart to fully apply.": "Préférence de langue enregistrée. Certaines étiquettes peuvent nécessiter un redémarrage de l'application pour s'appliquer complètement.",
+            "Turn your routine work into contemporary art": "Transformez votre travail routinier en art contemporain",
         },
         "es-419": {
             "Ready": "Listo",
@@ -1342,6 +1348,7 @@ class I18nService:
             "You are up to date": "Estás al día",
             "Automatic install failed. Opening downloaded package for manual installation.": "La instalación automática falló. Abriendo el paquete descargado para instalación manual.",
             "Language preference saved. Some labels may require app restart to fully apply.": "Preferencia de idioma guardada. Es posible que algunas etiquetas requieran reiniciar la aplicación para aplicarse por completo.",
+            "Turn your routine work into contemporary art": "Convierte tu trabajo rutinario en arte contemporáneo",
         },
         "ru": {
             "Ready": "Готово",
@@ -1486,6 +1493,7 @@ class I18nService:
             "You are up to date": "Güncelsiniz",
             "Automatic install failed. Opening downloaded package for manual installation.": "Otomatik kurulum başarısız oldu. Manuel kurulum için indirilen paket açılıyor.",
             "Language preference saved. Some labels may require app restart to fully apply.": "Dil tercihi kaydedildi. Bazı etiketlerin tamamen uygulanması için uygulamayı yeniden başlatmanız gerekebilir.",
+            "Turn your routine work into contemporary art": "Rutin işlerini çağdaş sanata dönüştür",
         },
         "ar": {
             "Ready": "جاهز",
@@ -1524,6 +1532,7 @@ class I18nService:
             "You are up to date": "أنت على أحدث إصدار",
             "Automatic install failed. Opening downloaded package for manual installation.": "فشل التثبيت التلقائي. جارٍ فتح الحزمة التي تم تنزيلها للتثبيت اليدوي.",
             "Language preference saved. Some labels may require app restart to fully apply.": "تم حفظ تفضيل اللغة. قد تتطلب بعض التسميات إعادة تشغيل التطبيق للتطبيق الكامل.",
+            "Turn your routine work into contemporary art": "حوّل عملك الروتيني إلى فن معاصر",
         },
         "zh-Hans": {
             "Ready": "就绪",
@@ -1562,6 +1571,7 @@ class I18nService:
             "You are up to date": "你已是最新版本",
             "Automatic install failed. Opening downloaded package for manual installation.": "自动安装失败。正在打开已下载的安装包以手动安装。",
             "Language preference saved. Some labels may require app restart to fully apply.": "语言偏好已保存。某些标签可能需要重启应用后才能完全生效。",
+            "Turn your routine work into contemporary art": "将你的日常工作变成当代艺术",
         },
         "zh-Hant": {
             "Ready": "就緒",
@@ -1600,6 +1610,7 @@ class I18nService:
             "You are up to date": "你已是最新版本",
             "Automatic install failed. Opening downloaded package for manual installation.": "自動安裝失敗。正在開啟已下載的安裝包以手動安裝。",
             "Language preference saved. Some labels may require app restart to fully apply.": "語言偏好已儲存。某些標籤可能需要重新啟動應用程式後才能完全生效。",
+            "Turn your routine work into contemporary art": "將你的日常工作化為當代藝術",
         },
         "ja": {
             "Ready": "準備完了",
@@ -2169,8 +2180,54 @@ class I18nService:
         return QLocale.system().toString(dt.time(), QLocale.FormatType.ShortFormat)
 
     def format_short_date(self, dt) -> str:
-        # Date format should follow user's system regional preference.
-        return QLocale.system().toString(dt.date(), QLocale.FormatType.ShortFormat)
+        # Date format should follow user's system regional preference but avoid weekday names
+        # in the session period label.
+        locale = QLocale.system()
+        pattern = self._date_pattern_without_weekday(locale.dateFormat(QLocale.FormatType.LongFormat))
+        if not pattern:
+            pattern = locale.dateFormat(QLocale.FormatType.ShortFormat)
+        return locale.toString(dt.date(), pattern)
+
+    @staticmethod
+    def _date_pattern_without_weekday(pattern: str) -> str:
+        if not pattern:
+            return pattern
+        out: list[str] = []
+        i = 0
+        in_quote = False
+        while i < len(pattern):
+            ch = pattern[i]
+            if ch == "'":
+                if i + 1 < len(pattern) and pattern[i + 1] == "'":
+                    out.append("''")
+                    i += 2
+                    continue
+                in_quote = not in_quote
+                out.append(ch)
+                i += 1
+                continue
+            if not in_quote and ch == "d":
+                j = i
+                while j < len(pattern) and pattern[j] == "d":
+                    j += 1
+                count = j - i
+                # d/dd = day number; ddd/dddd = localized weekday name.
+                if count >= 3:
+                    i = j
+                    continue
+                out.append("d" * count)
+                i = j
+                continue
+            out.append(ch)
+            i += 1
+
+        cleaned = "".join(out)
+        cleaned = re.sub(r"\s*,\s*", ", ", cleaned)
+        cleaned = re.sub(r"\s{2,}", " ", cleaned).strip()
+        cleaned = re.sub(r"^[,./\-\s]+", "", cleaned)
+        cleaned = re.sub(r"[,./\-\s]+$", "", cleaned)
+        cleaned = re.sub(r",\s*,", ",", cleaned)
+        return cleaned.strip()
 
     @staticmethod
     def _language_fallback_chain(lang: str) -> tuple[str, ...]:

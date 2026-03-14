@@ -124,6 +124,20 @@ def build_main_menu(
     options_menu.addAction(refresh_desktop_action)
 
     options_menu.addSeparator()
+    check_updates_action = QAction(tr("menu.check_updates"), parent)
+    check_updates_action.triggered.connect(on_check_updates)
+    options_menu.addAction(check_updates_action)
+
+    auto_update_action = QAction(tr("menu.auto_updates"), parent)
+    auto_update_action.setCheckable(True)
+    auto_update_action.toggled.connect(on_auto_update_toggled)
+    options_menu.addAction(auto_update_action)
+
+    install_downloaded_action = QAction(tr("menu.update_now"), parent)
+    install_downloaded_action.triggered.connect(on_open_downloaded_update)
+    options_menu.addAction(install_downloaded_action)
+
+    options_menu.addSeparator()
     language_menu = options_menu.addMenu(tr("menu.language"))
     language_group = QActionGroup(parent)
     language_group.setExclusive(True)
@@ -142,21 +156,6 @@ def build_main_menu(
     about_action = QAction(tr("menu.about_iograph"), parent)
     about_action.triggered.connect(on_about)
     help_menu.addAction(about_action)
-    help_menu.addSeparator()
-
-    check_updates_action = QAction(tr("menu.check_updates"), parent)
-    check_updates_action.triggered.connect(on_check_updates)
-    help_menu.addAction(check_updates_action)
-
-    auto_update_action = QAction(tr("menu.auto_updates"), parent)
-    auto_update_action.setCheckable(True)
-    auto_update_action.toggled.connect(on_auto_update_toggled)
-    help_menu.addAction(auto_update_action)
-
-    install_downloaded_action = QAction(tr("menu.update_now"), parent)
-    install_downloaded_action.triggered.connect(on_open_downloaded_update)
-    help_menu.addAction(install_downloaded_action)
-
     help_menu.addSeparator()
     resources_menu = help_menu.addMenu(tr("menu.resources"))
     about_iographica_action = resources_menu.addAction(tr("menu.about_iographica"), on_open_about_iographica)
