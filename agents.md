@@ -257,9 +257,12 @@ Ship IOGraph Python + PyQt as production app with stable update flow.
   - `ja` (Japanese)
   - `kk` (Kazakh)
   - `sr` (Serbian)
+  - `sv` (Swedish)
+  - `nl` (Dutch)
+  - `pl` (Polish)
 - Extended `SUPPORTED_LANGUAGES` and `LANGUAGE_LABELS` in `iograph/services/i18n.py`.
-- Added base menu/update translation entries in `_TRANSLATIONS` for all three new languages.
-- Added runtime/session/dialog coverage entries in `_EXTRA_TRANSLATIONS` for all three new languages.
+- Added base menu/update translation entries in `_TRANSLATIONS` for all new languages.
+- Added runtime/session/dialog coverage entries in `_EXTRA_TRANSLATIONS` for all new languages.
 - Added Serbian plural handling:
   - new `sr` templates in `_PLURAL_TEMPLATES`
   - plural category routing (`one/few/other`) in `_plural_category`.
@@ -299,6 +302,10 @@ Ship IOGraph Python + PyQt as production app with stable update flow.
   - or when checkpoint backup is explicitly requested
 - Keep remote noise low:
   - delete remote feature branches after local merge unless explicitly needed.
+- Current state:
+  - `feature/i18n-foundation` merged locally into `python-port`
+  - remote `feature/i18n-foundation` deleted
+  - active working branch is `python-port`
 
 ## Locale variants polishing (2026-03-14, latest)
 - Migrated translation dictionary keys from legacy:
