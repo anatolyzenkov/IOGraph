@@ -1959,6 +1959,300 @@ class I18nService:
         },
     }
 
+    _PROMPT_TEMPLATE_TRANSLATIONS = {
+        "de": {
+            "IOGraph {version} is available.\n\nDownload now?": "IOGraph {version} ist verfügbar.\n\nJetzt herunterladen?"
+        },
+        "fr": {
+            "IOGraph {version} is available.\n\nDownload now?": "IOGraph {version} est disponible.\n\nTélécharger maintenant ?"
+        },
+        "es-419": {
+            "IOGraph {version} is available.\n\nDownload now?": "IOGraph {version} está disponible.\n\n¿Descargar ahora?"
+        },
+        "es-ES": {
+            "IOGraph {version} is available.\n\nDownload now?": "IOGraph {version} está disponible.\n\n¿Descargar ahora?"
+        },
+        "pt-BR": {
+            "IOGraph {version} is available.\n\nDownload now?": "IOGraph {version} está disponível.\n\nBaixar agora?"
+        },
+        "pt-PT": {
+            "IOGraph {version} is available.\n\nDownload now?": "IOGraph {version} está disponível.\n\nTransferir agora?"
+        },
+        "it": {
+            "IOGraph {version} is available.\n\nDownload now?": "IOGraph {version} è disponibile.\n\nScaricare ora?"
+        },
+        "ru": {
+            "IOGraph {version} is available.\n\nDownload now?": "IOGraph {version} доступен.\n\nСкачать сейчас?"
+        },
+        "uk": {
+            "IOGraph {version} is available.\n\nDownload now?": "IOGraph {version} доступний.\n\nЗавантажити зараз?"
+        },
+        "tr": {
+            "IOGraph {version} is available.\n\nDownload now?": "IOGraph {version} sürümü mevcut.\n\nŞimdi indirilsin mi?"
+        },
+        "ar": {
+            "IOGraph {version} is available.\n\nDownload now?": "IOGraph {version} متاح.\n\nهل تريد التنزيل الآن؟"
+        },
+        "zh-Hans": {
+            "IOGraph {version} is available.\n\nDownload now?": "IOGraph {version} 可用。\n\n现在下载吗？"
+        },
+        "zh-Hant": {
+            "IOGraph {version} is available.\n\nDownload now?": "IOGraph {version} 可用。\n\n現在下載嗎？"
+        },
+        "ja": {
+            "IOGraph {version} is available.\n\nDownload now?": "IOGraph {version} を利用できます。\n\n今すぐダウンロードしますか？"
+        },
+        "kk": {
+            "IOGraph {version} is available.\n\nDownload now?": "IOGraph {version} нұсқасы қолжетімді.\n\nҚазір жүктейсіз бе?"
+        },
+        "sr": {
+            "IOGraph {version} is available.\n\nDownload now?": "IOGraph {version} је доступан.\n\nПреузети сада?"
+        },
+        "sv": {
+            "IOGraph {version} is available.\n\nDownload now?": "IOGraph {version} finns tillgänglig.\n\nLadda ner nu?"
+        },
+        "nl": {
+            "IOGraph {version} is available.\n\nDownload now?": "IOGraph {version} is beschikbaar.\n\nNu downloaden?"
+        },
+        "pl": {
+            "IOGraph {version} is available.\n\nDownload now?": "IOGraph {version} jest dostępny.\n\nPobrać teraz?"
+        },
+        "el": {
+            "IOGraph {version} is available.\n\nDownload now?": "Το IOGraph {version} είναι διαθέσιμο.\n\nΛήψη τώρα;"
+        },
+    }
+
+    _MISSING_KEY_COMPLETION = {
+        "de": {
+            "IOGraph": "IOGraph",
+            "IOGraph is already running.": "IOGraph wird bereits ausgeführt.",
+            "Exporting image...": "Bild wird exportiert...",
+            "Image saved": "Bild gespeichert",
+            "Failed to save image": "Bild konnte nicht gespeichert werden",
+            "Rendering preview...": "Vorschau wird gerendert...",
+            "Preview rendered": "Vorschau gerendert",
+            "Desktop snapshot updated": "Desktop-Snapshot aktualisiert",
+            "Failed to capture desktop snapshot": "Desktop-Snapshot konnte nicht erfasst werden",
+            "New version of IOGraph is already downloaded.\n\nOpen downloaded update package?": "Neue Version von IOGraph ist bereits heruntergeladen.\n\nHeruntergeladenes Update-Paket öffnen?",
+            "New version of IOGraph is already downloaded.\n\nClose and install now?": "Neue Version von IOGraph ist bereits heruntergeladen.\n\nJetzt schließen und installieren?",
+            "New version of IOGraph is ready to install.\n\nClose and install now?": "Neue Version von IOGraph ist bereit zur Installation.\n\nJetzt schließen und installieren?",
+            "New version of IOGraph is downloaded.\n\nOpen downloaded update package?": "Neue Version von IOGraph wurde heruntergeladen.\n\nHeruntergeladenes Update-Paket öffnen?",
+            "Install Downloaded Update...": "Heruntergeladenes Update installieren...",
+            "Open Update Package": "Update-Paket öffnen",
+        },
+        "fr": {
+            "IOGraph": "IOGraph",
+            "IOGraph is already running.": "IOGraph est déjà en cours d'exécution.",
+            "Exporting image...": "Exportation de l'image...",
+            "Image saved": "Image enregistrée",
+            "Failed to save image": "Échec de l'enregistrement de l'image",
+            "Rendering preview...": "Rendu de l'aperçu...",
+            "Preview rendered": "Aperçu rendu",
+            "Desktop snapshot updated": "Instantané du bureau mis à jour",
+            "Failed to capture desktop snapshot": "Échec de la capture de l'instantané du bureau",
+            "New version of IOGraph is already downloaded.\n\nOpen downloaded update package?": "La nouvelle version d'IOGraph est déjà téléchargée.\n\nOuvrir le package de mise à jour téléchargé ?",
+            "New version of IOGraph is already downloaded.\n\nClose and install now?": "La nouvelle version d'IOGraph est déjà téléchargée.\n\nFermer et installer maintenant ?",
+            "New version of IOGraph is ready to install.\n\nClose and install now?": "La nouvelle version d'IOGraph est prête à être installée.\n\nFermer et installer maintenant ?",
+            "New version of IOGraph is downloaded.\n\nOpen downloaded update package?": "La nouvelle version d'IOGraph est téléchargée.\n\nOuvrir le package de mise à jour téléchargé ?",
+            "Install Downloaded Update...": "Installer la mise à jour téléchargée...",
+            "Open Update Package": "Ouvrir le package de mise à jour",
+        },
+        "es-419": {
+            "IOGraph": "IOGraph",
+            "IOGraph is already running.": "IOGraph ya se está ejecutando.",
+            "Exporting image...": "Exportando imagen...",
+            "Image saved": "Imagen guardada",
+            "Failed to save image": "No se pudo guardar la imagen",
+            "Rendering preview...": "Renderizando vista previa...",
+            "Preview rendered": "Vista previa renderizada",
+            "Desktop snapshot updated": "Captura del escritorio actualizada",
+            "Failed to capture desktop snapshot": "No se pudo capturar el escritorio",
+            "New version of IOGraph is already downloaded.\n\nOpen downloaded update package?": "La nueva versión de IOGraph ya está descargada.\n\n¿Abrir el paquete de actualización descargado?",
+            "New version of IOGraph is already downloaded.\n\nClose and install now?": "La nueva versión de IOGraph ya está descargada.\n\n¿Cerrar e instalar ahora?",
+            "New version of IOGraph is ready to install.\n\nClose and install now?": "La nueva versión de IOGraph está lista para instalarse.\n\n¿Cerrar e instalar ahora?",
+            "New version of IOGraph is downloaded.\n\nOpen downloaded update package?": "La nueva versión de IOGraph se descargó.\n\n¿Abrir el paquete de actualización descargado?",
+            "Install Downloaded Update...": "Instalar actualización descargada...",
+            "Open Update Package": "Abrir paquete de actualización",
+        },
+        "pt-BR": {
+            "IOGraph": "IOGraph",
+            "IOGraph is already running.": "IOGraph já está em execução.",
+            "Exporting image...": "Exportando imagem...",
+            "Image saved": "Imagem salva",
+            "Failed to save image": "Falha ao salvar imagem",
+            "Rendering preview...": "Renderizando pré-visualização...",
+            "Preview rendered": "Pré-visualização renderizada",
+            "Desktop snapshot updated": "Captura da área de trabalho atualizada",
+            "Failed to capture desktop snapshot": "Falha ao capturar a área de trabalho",
+            "New version of IOGraph is already downloaded.\n\nOpen downloaded update package?": "A nova versão do IOGraph já foi baixada.\n\nAbrir o pacote de atualização baixado?",
+            "New version of IOGraph is already downloaded.\n\nClose and install now?": "A nova versão do IOGraph já foi baixada.\n\nFechar e instalar agora?",
+            "New version of IOGraph is ready to install.\n\nClose and install now?": "A nova versão do IOGraph está pronta para instalar.\n\nFechar e instalar agora?",
+            "New version of IOGraph is downloaded.\n\nOpen downloaded update package?": "A nova versão do IOGraph foi baixada.\n\nAbrir o pacote de atualização baixado?",
+            "Install Downloaded Update...": "Instalar atualização baixada...",
+            "Open Update Package": "Abrir pacote de atualização",
+        },
+        "it": {
+            "IOGraph": "IOGraph",
+            "IOGraph is already running.": "IOGraph è già in esecuzione.",
+            "Exporting image...": "Esportazione immagine...",
+            "Image saved": "Immagine salvata",
+            "Failed to save image": "Impossibile salvare l'immagine",
+            "Rendering preview...": "Rendering dell'anteprima...",
+            "Preview rendered": "Anteprima renderizzata",
+            "Desktop snapshot updated": "Snapshot desktop aggiornato",
+            "Failed to capture desktop snapshot": "Impossibile acquisire lo snapshot del desktop",
+            "New version of IOGraph is already downloaded.\n\nOpen downloaded update package?": "La nuova versione di IOGraph è già scaricata.\n\nAprire il pacchetto di aggiornamento scaricato?",
+            "New version of IOGraph is already downloaded.\n\nClose and install now?": "La nuova versione di IOGraph è già scaricata.\n\nChiudere e installare ora?",
+            "New version of IOGraph is ready to install.\n\nClose and install now?": "La nuova versione di IOGraph è pronta per l'installazione.\n\nChiudere e installare ora?",
+            "New version of IOGraph is downloaded.\n\nOpen downloaded update package?": "La nuova versione di IOGraph è stata scaricata.\n\nAprire il pacchetto di aggiornamento scaricato?",
+            "Install Downloaded Update...": "Installa aggiornamento scaricato...",
+            "Open Update Package": "Apri pacchetto di aggiornamento",
+        },
+        "tr": {
+            "IOGraph": "IOGraph",
+            "IOGraph is already running.": "IOGraph zaten çalışıyor.",
+            "Exporting image...": "Görsel dışa aktarılıyor...",
+            "Image saved": "Görsel kaydedildi",
+            "Failed to save image": "Görsel kaydedilemedi",
+            "Rendering preview...": "Önizleme oluşturuluyor...",
+            "Preview rendered": "Önizleme oluşturuldu",
+            "Desktop snapshot updated": "Masaüstü görüntüsü güncellendi",
+            "Failed to capture desktop snapshot": "Masaüstü görüntüsü alınamadı",
+            "New version of IOGraph is already downloaded.\n\nOpen downloaded update package?": "IOGraph'ın yeni sürümü zaten indirildi.\n\nİndirilen güncelleme paketini aç?",
+            "New version of IOGraph is already downloaded.\n\nClose and install now?": "IOGraph'ın yeni sürümü zaten indirildi.\n\nŞimdi kapatıp yükle?",
+            "New version of IOGraph is ready to install.\n\nClose and install now?": "IOGraph'ın yeni sürümü kuruluma hazır.\n\nŞimdi kapatıp yükle?",
+            "New version of IOGraph is downloaded.\n\nOpen downloaded update package?": "IOGraph'ın yeni sürümü indirildi.\n\nİndirilen güncelleme paketini aç?",
+            "Install Downloaded Update...": "İndirilen güncellemeyi yükle...",
+            "Open Update Package": "Güncelleme paketini aç",
+        },
+        "ar": {
+            "IOGraph": "IOGraph",
+            "IOGraph is already running.": "IOGraph قيد التشغيل بالفعل.",
+            "Exporting image...": "جارٍ تصدير الصورة...",
+            "Image saved": "تم حفظ الصورة",
+            "Failed to save image": "فشل حفظ الصورة",
+            "Rendering preview...": "جارٍ إنشاء المعاينة...",
+            "Preview rendered": "تم إنشاء المعاينة",
+            "Desktop snapshot updated": "تم تحديث لقطة سطح المكتب",
+            "Failed to capture desktop snapshot": "فشل التقاط لقطة سطح المكتب",
+            "New version of IOGraph is already downloaded.\n\nOpen downloaded update package?": "تم تنزيل الإصدار الجديد من IOGraph بالفعل.\n\nفتح حزمة التحديث التي تم تنزيلها؟",
+            "New version of IOGraph is already downloaded.\n\nClose and install now?": "تم تنزيل الإصدار الجديد من IOGraph بالفعل.\n\nإغلاق التطبيق والتثبيت الآن؟",
+            "New version of IOGraph is ready to install.\n\nClose and install now?": "الإصدار الجديد من IOGraph جاهز للتثبيت.\n\nإغلاق التطبيق والتثبيت الآن؟",
+            "New version of IOGraph is downloaded.\n\nOpen downloaded update package?": "تم تنزيل الإصدار الجديد من IOGraph.\n\nفتح حزمة التحديث التي تم تنزيلها؟",
+            "Install Downloaded Update...": "تثبيت التحديث الذي تم تنزيله...",
+            "Open Update Package": "فتح حزمة التحديث",
+        },
+        "zh-Hans": {
+            "IOGraph": "IOGraph",
+            "IOGraph is already running.": "IOGraph 已在运行。",
+            "Exporting image...": "正在导出图像...",
+            "Image saved": "图像已保存",
+            "Failed to save image": "保存图像失败",
+            "Rendering preview...": "正在渲染预览...",
+            "Preview rendered": "预览已渲染",
+            "Desktop snapshot updated": "桌面快照已更新",
+            "Failed to capture desktop snapshot": "捕获桌面快照失败",
+            "New version of IOGraph is already downloaded.\n\nOpen downloaded update package?": "新版本 IOGraph 已下载。\n\n打开已下载的更新包？",
+            "New version of IOGraph is already downloaded.\n\nClose and install now?": "新版本 IOGraph 已下载。\n\n现在关闭并安装？",
+            "New version of IOGraph is ready to install.\n\nClose and install now?": "新版本 IOGraph 已准备好安装。\n\n现在关闭并安装？",
+            "New version of IOGraph is downloaded.\n\nOpen downloaded update package?": "新版本 IOGraph 已下载。\n\n打开已下载的更新包？",
+            "Install Downloaded Update...": "安装已下载的更新...",
+            "Open Update Package": "打开更新包",
+        },
+        "zh-Hant": {
+            "IOGraph": "IOGraph",
+            "IOGraph is already running.": "IOGraph 已在執行。",
+            "Exporting image...": "正在匯出影像...",
+            "Image saved": "影像已儲存",
+            "Failed to save image": "儲存影像失敗",
+            "Rendering preview...": "正在產生預覽...",
+            "Preview rendered": "預覽已產生",
+            "Desktop snapshot updated": "桌面快照已更新",
+            "Failed to capture desktop snapshot": "擷取桌面快照失敗",
+            "New version of IOGraph is already downloaded.\n\nOpen downloaded update package?": "新版 IOGraph 已下載。\n\n要開啟已下載的更新套件嗎？",
+            "New version of IOGraph is already downloaded.\n\nClose and install now?": "新版 IOGraph 已下載。\n\n現在關閉並安裝嗎？",
+            "New version of IOGraph is ready to install.\n\nClose and install now?": "新版 IOGraph 已準備好安裝。\n\n現在關閉並安裝嗎？",
+            "New version of IOGraph is downloaded.\n\nOpen downloaded update package?": "新版 IOGraph 已下載。\n\n要開啟已下載的更新套件嗎？",
+            "Install Downloaded Update...": "安裝已下載的更新...",
+            "Open Update Package": "開啟更新套件",
+        },
+        "ru": {"IOGraph": "IOGraph"},
+        "uk": {"IOGraph": "IOGraph"},
+        "ja": {
+            "IOGraph": "IOGraph",
+            "New version of IOGraph is already downloaded.\n\nOpen downloaded update package?": "IOGraph の新しいバージョンはすでにダウンロードされています。\n\nダウンロード済みアップデートパッケージを開きますか？",
+            "New version of IOGraph is already downloaded.\n\nClose and install now?": "IOGraph の新しいバージョンはすでにダウンロードされています。\n\n今すぐ閉じてインストールしますか？",
+            "New version of IOGraph is ready to install.\n\nClose and install now?": "IOGraph の新しいバージョンをインストールする準備ができました。\n\n今すぐ閉じてインストールしますか？",
+            "New version of IOGraph is downloaded.\n\nOpen downloaded update package?": "IOGraph の新しいバージョンがダウンロードされました。\n\nダウンロード済みアップデートパッケージを開きますか？",
+            "Install Downloaded Update...": "ダウンロード済みアップデートをインストール...",
+            "Open Update Package": "アップデートパッケージを開く",
+        },
+        "kk": {
+            "IOGraph": "IOGraph",
+            "New version of IOGraph is already downloaded.\n\nOpen downloaded update package?": "IOGraph-тың жаңа нұсқасы әлдеқашан жүктелген.\n\nЖүктелген жаңарту бумасын ашу керек пе?",
+            "New version of IOGraph is already downloaded.\n\nClose and install now?": "IOGraph-тың жаңа нұсқасы әлдеқашан жүктелген.\n\nҚазір жауып, орнату керек пе?",
+            "New version of IOGraph is ready to install.\n\nClose and install now?": "IOGraph-тың жаңа нұсқасы орнатуға дайын.\n\nҚазір жауып, орнату керек пе?",
+            "New version of IOGraph is downloaded.\n\nOpen downloaded update package?": "IOGraph-тың жаңа нұсқасы жүктелді.\n\nЖүктелген жаңарту бумасын ашу керек пе?",
+            "Install Downloaded Update...": "Жүктелген жаңартуды орнату...",
+            "Open Update Package": "Жаңарту бумасын ашу",
+        },
+        "sr": {
+            "IOGraph": "IOGraph",
+            "New version of IOGraph is already downloaded.\n\nOpen downloaded update package?": "Нова верзија IOGraph-а је већ преузета.\n\nОтворити преузети пакет ажурирања?",
+            "New version of IOGraph is already downloaded.\n\nClose and install now?": "Нова верзија IOGraph-а је већ преузета.\n\nЗатворити и инсталирати сада?",
+            "New version of IOGraph is ready to install.\n\nClose and install now?": "Нова верзија IOGraph-а је спремна за инсталацију.\n\nЗатворити и инсталирати сада?",
+            "New version of IOGraph is downloaded.\n\nOpen downloaded update package?": "Нова верзија IOGraph-а је преузета.\n\nОтворити преузети пакет ажурирања?",
+            "Install Downloaded Update...": "Инсталирај преузето ажурирање...",
+            "Open Update Package": "Отвори пакет ажурирања",
+        },
+        "sv": {
+            "IOGraph": "IOGraph",
+            "New version of IOGraph is already downloaded.\n\nOpen downloaded update package?": "Ny version av IOGraph är redan nedladdad.\n\nÖppna det nedladdade uppdateringspaketet?",
+            "New version of IOGraph is already downloaded.\n\nClose and install now?": "Ny version av IOGraph är redan nedladdad.\n\nStäng och installera nu?",
+            "New version of IOGraph is ready to install.\n\nClose and install now?": "Ny version av IOGraph är redo att installeras.\n\nStäng och installera nu?",
+            "New version of IOGraph is downloaded.\n\nOpen downloaded update package?": "Ny version av IOGraph har laddats ner.\n\nÖppna det nedladdade uppdateringspaketet?",
+            "Install Downloaded Update...": "Installera nedladdad uppdatering...",
+            "Open Update Package": "Öppna uppdateringspaket",
+        },
+        "nl": {
+            "IOGraph": "IOGraph",
+            "New version of IOGraph is already downloaded.\n\nOpen downloaded update package?": "Nieuwe versie van IOGraph is al gedownload.\n\nGedownload updatepakket openen?",
+            "New version of IOGraph is already downloaded.\n\nClose and install now?": "Nieuwe versie van IOGraph is al gedownload.\n\nNu sluiten en installeren?",
+            "New version of IOGraph is ready to install.\n\nClose and install now?": "Nieuwe versie van IOGraph is klaar om te installeren.\n\nNu sluiten en installeren?",
+            "New version of IOGraph is downloaded.\n\nOpen downloaded update package?": "Nieuwe versie van IOGraph is gedownload.\n\nGedownload updatepakket openen?",
+            "Install Downloaded Update...": "Gedownloade update installeren...",
+            "Open Update Package": "Updatepakket openen",
+        },
+        "pl": {
+            "IOGraph": "IOGraph",
+            "New version of IOGraph is already downloaded.\n\nOpen downloaded update package?": "Nowa wersja IOGraph jest już pobrana.\n\nOtworzyć pobrany pakiet aktualizacji?",
+            "New version of IOGraph is already downloaded.\n\nClose and install now?": "Nowa wersja IOGraph jest już pobrana.\n\nZamknąć i zainstalować teraz?",
+            "New version of IOGraph is ready to install.\n\nClose and install now?": "Nowa wersja IOGraph jest gotowa do instalacji.\n\nZamknąć i zainstalować teraz?",
+            "New version of IOGraph is downloaded.\n\nOpen downloaded update package?": "Nowa wersja IOGraph została pobrana.\n\nOtworzyć pobrany pakiet aktualizacji?",
+            "Install Downloaded Update...": "Zainstaluj pobraną aktualizację...",
+            "Open Update Package": "Otwórz pakiet aktualizacji",
+        },
+        "el": {
+            "IOGraph": "IOGraph",
+            "New version of IOGraph is already downloaded.\n\nOpen downloaded update package?": "Η νέα έκδοση του IOGraph έχει ήδη ληφθεί.\n\nΆνοιγμα του ληφθέντος πακέτου ενημέρωσης;",
+            "New version of IOGraph is already downloaded.\n\nClose and install now?": "Η νέα έκδοση του IOGraph έχει ήδη ληφθεί.\n\nΚλείσιμο και εγκατάσταση τώρα;",
+            "New version of IOGraph is ready to install.\n\nClose and install now?": "Η νέα έκδοση του IOGraph είναι έτοιμη για εγκατάσταση.\n\nΚλείσιμο και εγκατάσταση τώρα;",
+            "New version of IOGraph is downloaded.\n\nOpen downloaded update package?": "Η νέα έκδοση του IOGraph λήφθηκε.\n\nΆνοιγμα του ληφθέντος πακέτου ενημέρωσης;",
+            "Install Downloaded Update...": "Εγκατάσταση ληφθείσας ενημέρωσης...",
+            "Open Update Package": "Άνοιγμα πακέτου ενημέρωσης",
+        },
+    }
+
+    for _lang, _patch in _MISSING_KEY_COMPLETION.items():
+        _EXTRA_TRANSLATIONS.setdefault(_lang, {}).update(_patch)
+
+    # Keep locale variants fully localized by inheriting their base dictionaries,
+    # then applying variant-specific overrides.
+    _TRANSLATIONS["es-ES"] = {**_TRANSLATIONS.get("es-419", {}), **_TRANSLATIONS.get("es-ES", {})}
+    _EXTRA_TRANSLATIONS["es-ES"] = {**_EXTRA_TRANSLATIONS.get("es-419", {}), **_EXTRA_TRANSLATIONS.get("es-ES", {})}
+    _TRANSLATIONS["pt-PT"] = {**_TRANSLATIONS.get("pt-BR", {}), **_TRANSLATIONS.get("pt-PT", {})}
+    _EXTRA_TRANSLATIONS["pt-PT"] = {**_EXTRA_TRANSLATIONS.get("pt-BR", {}), **_EXTRA_TRANSLATIONS.get("pt-PT", {})}
+
     _PLURAL_TEMPLATES = {
         "default": {
             "session.time.second": {"one": "{value} second", "other": "{value} seconds"},
@@ -2142,6 +2436,9 @@ class I18nService:
             if translated is not None:
                 return translated
             translated = self._EXTRA_TRANSLATIONS.get(lang, {}).get(source)
+            if translated is not None:
+                return translated
+            translated = self._PROMPT_TEMPLATE_TRANSLATIONS.get(lang, {}).get(source)
             if translated is not None:
                 return translated
         return source

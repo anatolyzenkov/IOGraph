@@ -177,6 +177,15 @@ Ship IOGraph Python + PyQt as production app with stable update flow.
 - Current task:
   - audit all remaining hardcoded user-facing strings in `iograph/**` and remove/replace with i18n ids where appropriate.
 
+## I18n release gate (2026-03-14)
+- Before next stable release:
+  - enforce 100% translation key coverage for all supported languages in `I18nService.translation_coverage_report()`.
+  - verify update dialogs/prompts are localized (no English fallback in non-English UI).
+  - run:
+    - `python3 -m compileall iograph`
+    - `scripts/smoke_regression.py`
+    - translation coverage audit via `I18nService.missing_translation_ids(...)`.
+
 ## I18n hardcoded audit (2026-03-14)
 - Confirmed user-facing hardcoded strings still present in:
   - `iograph/core/session_controller.py`
