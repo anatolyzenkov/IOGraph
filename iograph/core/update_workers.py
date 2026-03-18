@@ -5,6 +5,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import zipfile
 from urllib.request import Request, urlopen
 
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
@@ -34,28 +35,45 @@ class UpdateDownloadWorker(QObject):
         self._asset_url = asset_url
         self._target_path = Path(target_path)
 
+    def _validate_download(self, path: Path) -> None:
+        if path.suffix.lower() != ".zip":
+            return
+        with zipfile.ZipFile(path, "r") as zf:
+            bad = zf.testzip()
+            if bad is not None:
+                raise ValueError(f"corrupt zip entry: {bad}")
+            names = [name.lower() for name in zf.namelist()]
+            if not any(".app/" in name for name in names):
+                raise ValueError("downloaded zip does not contain .app bundle")
+
     @pyqtSlot()
     def run(self) -> None:
         tmp_path = self._target_path.with_suffix(self._target_path.suffix + ".part")
-        try:
-            req = Request(
-                self._asset_url,
-                headers={
-                    "Accept": "application/octet-stream",
-                    "User-Agent": "IOGraph-Updater",
-                },
-            )
-            with urlopen(req, timeout=30) as response, tmp_path.open("wb") as out:
-                shutil.copyfileobj(response, out)
-            tmp_path.replace(self._target_path)
-            self.finished.emit(True, str(self._target_path), "")
-        except Exception as exc:
+        attempts = 2
+        last_error = ""
+        for _attempt in range(attempts):
             try:
-                if tmp_path.exists():
-                    tmp_path.unlink()
-            except Exception:
-                pass
-            self.finished.emit(False, str(self._target_path), str(exc))
+                req = Request(
+                    self._asset_url,
+                    headers={
+                        "Accept": "application/octet-stream",
+                        "User-Agent": "IOGraph-Updater",
+                    },
+                )
+                with urlopen(req, timeout=30) as response, tmp_path.open("wb") as out:
+                    shutil.copyfileobj(response, out)
+                self._validate_download(tmp_path)
+                tmp_path.replace(self._target_path)
+                self.finished.emit(True, str(self._target_path), "")
+                return
+            except Exception as exc:
+                last_error = str(exc)
+                try:
+                    if tmp_path.exists():
+                        tmp_path.unlink()
+                except Exception:
+                    pass
+        self.finished.emit(False, str(self._target_path), last_error)
 
 
 class MacZipInstallWorker(QObject):

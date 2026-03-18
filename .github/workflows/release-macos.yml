@@ -39,11 +39,21 @@ jobs:
           pyinstaller \
             --noconfirm \
             --windowed \
+            --target-arch universal2 \
             --name IOGraph \
             --icon packaging/assets/dmg/IOGraphVolume.icns \
             --add-data "iograph/resources:iograph/resources" \
             --collect-all PyQt6 \
             run_iograph.py
+
+      - name: Verify macOS binary architectures
+        run: |
+          set -euo pipefail
+          MAIN_BIN="dist/IOGraph.app/Contents/MacOS/IOGraph"
+          ARCHS="$(lipo -archs "${MAIN_BIN}")"
+          echo "Binary architectures: ${ARCHS}"
+          [[ "${ARCHS}" == *"x86_64"* ]] || { echo "::error::Missing x86_64 slice"; exit 1; }
+          [[ "${ARCHS}" == *"arm64"* ]] || { echo "::error::Missing arm64 slice"; exit 1; }
 
       - name: Set app bundle version metadata
         run: |

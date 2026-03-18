@@ -27,6 +27,9 @@ Ship and maintain IOGraph Python + PyQt as a stable production app with reliable
   - `actions/checkout@v5`
   - `actions/setup-python@v6`
 - Ubuntu CI installs required PyQt6 system libs before smoke checks.
+- macOS release target:
+  - build as `universal2` app bundle
+  - CI must verify both `x86_64` and `arm64` slices are present
 
 ## Release Artifacts
 - macOS:
@@ -63,6 +66,15 @@ Ship and maintain IOGraph Python + PyQt as a stable production app with reliable
   - `updates/last_auto_downloaded_version`
   - `updates/last_prompted_version`
 
+## Update UX Principle
+- Do not expose technical update internals to users unless strictly necessary.
+- If multiple downloaded update artifacts exist and one is corrupted, app should recover automatically:
+  - validate downloaded package before install,
+  - retry download when package is invalid,
+  - switch to valid artifact path when possible,
+  - clean broken metadata/artifacts silently.
+- User-facing update messages should stay simple and action-oriented (no low-level command errors).
+
 ## Localization Status
 - Supported languages:
   - `en`, `de`, `fr`, `es-419`, `es-ES`, `pt-BR`, `pt-PT`, `it`, `ru`, `uk`, `tr`, `ar`, `zh-Hans`, `zh-Hant`, `ja`, `kk`, `sr`, `sv`, `nl`, `pl`, `el`
@@ -79,3 +91,8 @@ Ship and maintain IOGraph Python + PyQt as a stable production app with reliable
 5. create/push tag
 6. verify both release workflows (`Release macOS` and `Release Windows`)
 
+## Validation Notes
+- Apple Silicon (`arm64`) can be validated locally.
+- Intel macOS (`x86_64`) must be validated either:
+  - by CI binary slice check, and
+  - by external manual confirmation on an Intel Mac when architecture compatibility is changed.

@@ -1480,6 +1480,19 @@ class MainWindow(QMainWindow):
         if ok:
             self._request_quit()
             return
+        lowered = (error or "").lower()
+        corrupt_zip_error = bool(
+            zip_path is not None
+            and zip_path.suffix.lower() == ".zip"
+            and ("ditto" in lowered or "zip" in lowered or "corrupt" in lowered or "end of central directory" in lowered)
+        )
+        if corrupt_zip_error and zip_path is not None:
+            try:
+                if zip_path.exists():
+                    zip_path.unlink()
+            except Exception:
+                pass
+            self._update_storage.clear_missing_download_file_state()
         QMessageBox.warning(
             self,
             self._t("update.install.title"),
@@ -1489,7 +1502,7 @@ class MainWindow(QMainWindow):
                 else self._t("update.install.auto_failed_with_error_template").format(error=error)
             ),
         )
-        if zip_path is not None:
+        if zip_path is not None and zip_path.exists():
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(zip_path)))
 
     def _on_macos_zip_install_thread_closed(self) -> None:

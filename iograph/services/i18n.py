@@ -2477,13 +2477,14 @@ class I18nService:
         return QLocale.system().toString(dt.time(), QLocale.FormatType.ShortFormat)
 
     def format_short_date(self, dt) -> str:
-        # Date format should follow user's system regional preference but avoid weekday names
-        # in the session period label.
-        locale = QLocale.system()
-        pattern = self._date_pattern_without_weekday(locale.dateFormat(QLocale.FormatType.LongFormat))
+        # Date format (order/separators) should follow system regional preference,
+        # while date text (month/day names) should follow selected app language.
+        system_locale = QLocale.system()
+        text_locale = self.effective_qlocale()
+        pattern = self._date_pattern_without_weekday(system_locale.dateFormat(QLocale.FormatType.LongFormat))
         if not pattern:
-            pattern = locale.dateFormat(QLocale.FormatType.ShortFormat)
-        return locale.toString(dt.date(), pattern)
+            pattern = system_locale.dateFormat(QLocale.FormatType.ShortFormat)
+        return text_locale.toString(dt.date(), pattern)
 
     @staticmethod
     def _date_pattern_without_weekday(pattern: str) -> str:
