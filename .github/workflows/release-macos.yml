@@ -62,7 +62,7 @@ jobs:
           path: out/IOGraph-arm64.zip
 
   build-macos-x86_64:
-    runs-on: macos-13
+    runs-on: macos-15-intel
     env:
       IOGRAPH_VERSION: ${{ github.ref_name }}
     steps:
