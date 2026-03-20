@@ -40,6 +40,12 @@ Ship and maintain IOGraph Python + PyQt as a stable production app with reliable
   - `IOGraph-windows-<version>.zip`
 - DMG volume icon asset:
   - `packaging/assets/dmg/IOGraphVolume.icns`
+- Confirmed compact DMG layout:
+  - `window-size 446 216`
+  - `icon-size 128`
+  - `IOGraph.app` at `50 24`
+  - `Applications` drop link at `260 24`
+  - larger experimental layout was rejected because icons drifted too low / required scrolling
 
 ## Version Source Priority
 1. `IOGRAPH_VERSION` env
