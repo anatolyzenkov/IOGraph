@@ -28,8 +28,9 @@ Ship and maintain IOGraph Python + PyQt as a stable production app with reliable
   - `actions/setup-python@v6`
 - Ubuntu CI installs required PyQt6 system libs before smoke checks.
 - macOS release target:
-  - build as `universal2` app bundle
-  - CI must verify both `x86_64` and `arm64` slices are present
+  - build arm64 and x86_64 app bundles separately
+  - merge them into one universal app bundle in release workflow
+  - CI must verify both `x86_64` and `arm64` slices across the full `.app`, not only the main binary
 
 ## Release Artifacts
 - macOS:
@@ -96,3 +97,6 @@ Ship and maintain IOGraph Python + PyQt as a stable production app with reliable
 - Intel macOS (`x86_64`) must be validated either:
   - by CI binary slice check, and
   - by external manual confirmation on an Intel Mac when architecture compatibility is changed.
+- Current open issue:
+  - `v2.0.3-rc.001` appeared to run on Apple Silicon but did not launch on Intel despite the main binary showing universal slices.
+  - Treat this as incomplete universal packaging until full-app slice verification and external Intel validation pass.

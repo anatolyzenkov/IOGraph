@@ -2477,13 +2477,12 @@ class I18nService:
         return QLocale.system().toString(dt.time(), QLocale.FormatType.ShortFormat)
 
     def format_short_date(self, dt) -> str:
-        # Date format (order/separators) should follow system regional preference,
-        # while date text (month/day names) should follow selected app language.
-        system_locale = QLocale.system()
+        # Date should follow the selected UI language completely, while time stays
+        # system-based so the user keeps their preferred 12/24h setting.
         text_locale = self.effective_qlocale()
-        pattern = self._date_pattern_without_weekday(system_locale.dateFormat(QLocale.FormatType.LongFormat))
+        pattern = self._date_pattern_without_weekday(text_locale.dateFormat(QLocale.FormatType.LongFormat))
         if not pattern:
-            pattern = system_locale.dateFormat(QLocale.FormatType.ShortFormat)
+            pattern = text_locale.dateFormat(QLocale.FormatType.ShortFormat)
         return text_locale.toString(dt.date(), pattern)
 
     @staticmethod
